@@ -482,6 +482,7 @@ fn english(de: &str) -> Option<&'static str> {
         "easybank: Anmeldeseite nicht erkannt (Portal geändert?)." => "easybank: login page not recognised (portal changed?).",
         "Bitte die SMS-TAN eingeben." => "Please enter the SMS TAN.",
         "easybank: Die SMS-TAN wurde nicht akzeptiert." => "easybank: The SMS TAN was not accepted.",
+        "Der Kontoauszug konnte nicht geladen werden." => "The statement could not be downloaded.",
         "easybank: Der Kontoauszug ist kein PDF." => "easybank: The statement is not a PDF.",
         "easybank: Unvollständige oder ungültige Portalantwort. Es wurden keine Daten übernommen." => "easybank: Incomplete or invalid portal response. No data was imported.",
         "Demo: Es wird keine echte Seite geöffnet. Beliebigen Text einfügen (z. B. https://localhost/cb?code=demo)." => "Demo: no real page is opened. Paste any text (e.g. https://localhost/cb?code=demo).",

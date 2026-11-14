@@ -39,7 +39,7 @@ pub enum ConnectorKind {
     Ibkr,
     /// quirion portal API, authenticated inside the embedded browser.
     Quirion,
-    /// easybank (formerly Barclays Deutschland) credit cards. Scaffold, see #209.
+    /// easybank (formerly Barclays Deutschland) credit cards and statements, see #209.
     Easybank,
 }
 

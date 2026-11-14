@@ -256,6 +256,15 @@ fn percent_decode(s: &str) -> String {
 }
 
 /// Persistable cookies (`name=value`) from a `Cookie` header value.
+/// A persisted `name=value` pair is only replayed when it cannot smuggle
+/// attributes (`;`) or extra header lines (control characters) into the jar.
+fn valid_cookie(c: &str) -> bool {
+    c.split_once('=')
+        .is_some_and(|(name, _)| !name.trim().is_empty())
+        && !c.contains(';')
+        && !c.chars().any(|ch| ch.is_control())
+}
+
 fn persistent_cookies(header: &str) -> Vec<String> {
     header
         .split(';')
@@ -346,7 +355,7 @@ impl EasybankConnector {
     fn restore_cookies(&self, state: &Value) {
         let url = Self::url();
         for c in state["cookies"].as_array().into_iter().flatten() {
-            if let Some(c) = c.as_str().filter(|c| c.contains('=') && !c.contains(';')) {
+            if let Some(c) = c.as_str().filter(|c| valid_cookie(c)) {
                 self.jar.add_cookie_str(
                     &format!("{c}; Domain=banking.easybank.de; Path=/; Secure; HttpOnly"),
                     &url,
@@ -682,6 +691,7 @@ impl EasybankConnector {
             .map(|c| c["Response"]["Item"].clone());
         let accounts = initial_account_list(&flow);
         let mut docs = Vec::new();
+        let mut first_error: Option<CoreError> = None;
         for account in &accounts {
             let number = text(account, "Number");
             let card = format!("card:{number}");
@@ -700,24 +710,24 @@ impl EasybankConnector {
             };
             let have = known.entry(card.clone()).or_default();
             for page in 1..=MAX_STATEMENT_PAGES {
-                for st in page_item["Statements"]
-                    .as_array()
-                    .cloned()
-                    .unwrap_or_default()
-                {
-                    let Some(date) = date(&st, "StatementDate") else {
-                        continue;
+                for (date, st) in pending_statements(&page_item, have, all) {
+                    // One broken PDF must not cost the other statements (or
+                    // the transactions already fetched); it is retried on the
+                    // next sync because its date stays unknown.
+                    let bytes = match self.download_statement(account, &st, &date).await {
+                        Ok(b) => b,
+                        Err(CoreError::SessionClosed) => return Err(CoreError::SessionClosed),
+                        Err(e) => {
+                            first_error.get_or_insert(e);
+                            continue;
+                        }
                     };
-                    if !all && have.contains(&date) {
-                        continue;
-                    }
-                    let bytes = self.download_statement(account, &st, &date).await?;
                     docs.push(statement_document(&card, number, &date, bytes));
                     if !have.contains(&date) {
                         have.push(date);
                     }
                 }
-                if page_item["HasMore"].as_bool() != Some(true) {
+                if !statements_has_more(&page_item) {
                     break;
                 }
                 page_item = self
@@ -729,7 +739,11 @@ impl EasybankConnector {
             }
             have.sort();
         }
-        Ok(docs)
+        match first_error {
+            // nothing came through: tell the caller why
+            Some(e) if docs.is_empty() => Err(e),
+            _ => Ok(docs),
+        }
     }
 
     /// The web app posts a classic form (it triggers a browser download);
@@ -765,14 +779,40 @@ impl EasybankConnector {
             ])
             .send()
             .await?;
-        let bytes = resp.bytes().await?.to_vec();
-        if !bytes.starts_with(b"%PDF-") || bytes.len() > MAX_PDF_BYTES {
+        if !resp.status().is_success() {
+            return Err(CoreError::Protocol {
+                message: format!(
+                    "easybank: {} HTTP {}",
+                    tr("Der Kontoauszug konnte nicht geladen werden."),
+                    resp.status().as_u16()
+                ),
+            });
+        }
+        // size-limited while streaming, not after the whole body is in memory
+        let bytes = super::read_body_limited(resp, MAX_PDF_BYTES).await?;
+        if !bytes.starts_with(b"%PDF-") {
             return Err(CoreError::Protocol {
                 message: tr("easybank: Der Kontoauszug ist kein PDF.").into(),
             });
         }
         Ok(bytes)
     }
+}
+
+/// Statements of one list page that still have to be downloaded: those with
+/// a date that are not in `have` (all of them when `all`).
+fn pending_statements(page: &Value, have: &[String], all: bool) -> Vec<(String, Value)> {
+    page["Statements"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|st| date(st, "StatementDate").map(|d| (d, st.clone())))
+        .filter(|(d, _)| all || !have.contains(d))
+        .collect()
+}
+
+fn statements_has_more(page: &Value) -> bool {
+    page["HasMore"].as_bool() == Some(true)
 }
 
 fn statement_document(
@@ -874,6 +914,44 @@ mod tests {
         let mut f = fixture();
         f["cards"][0]["transactions"][0]["TransactionNature"] = json!("Unknown");
         assert!(snapshot(&f.to_string()).is_err());
+    }
+
+    #[test]
+    fn restore_cookies_rejects_attribute_and_header_injection() {
+        let c = EasybankConnector::new();
+        c.restore_cookies(&json!({"cookies": [
+            "good=1",
+            "evil=1; Domain=attacker.example",
+            "crlf=1\r\nX-Injected: 1",
+            "=novalue",
+            "noequals",
+            42,
+        ]}));
+        let header = c.cookie_header();
+        assert!(header.contains("good=1"), "{header}");
+        for bad in ["evil", "crlf", "Injected", "noequals", "novalue"] {
+            assert!(!header.contains(bad), "{bad} in {header}");
+        }
+    }
+
+    #[test]
+    fn statement_pages_skip_known_and_undated_unless_all() {
+        let page = json!({"HasMore": true, "Statements": [
+            {"StatementDate": "2026-10-10T00:00:00+00:00", "DocumentID": "a"},
+            {"StatementDate": "2026-09-10T00:00:00+00:00", "DocumentID": "b"},
+            {"DocumentID": "no-date"},
+        ]});
+        let have = vec!["2026-10-10".to_string()];
+        let new: Vec<_> = pending_statements(&page, &have, false)
+            .into_iter()
+            .map(|(d, _)| d)
+            .collect();
+        assert_eq!(new, ["2026-09-10"]);
+        assert_eq!(pending_statements(&page, &have, true).len(), 2);
+        assert!(statements_has_more(&page));
+        assert!(!statements_has_more(&json!({"HasMore": false})));
+        assert!(!statements_has_more(&json!({})));
+        assert!(pending_statements(&json!({}), &[], true).is_empty());
     }
 
     #[test]
