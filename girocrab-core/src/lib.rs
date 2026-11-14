@@ -23,6 +23,7 @@
 
 uniffi::setup_scaffolding!();
 
+pub mod assets;
 pub mod banking_gate;
 pub mod connections;
 pub mod connectors;
@@ -41,11 +42,13 @@ pub mod money;
 pub mod opening_balance;
 pub mod planning;
 pub mod recurring;
+pub mod report_sanitizer;
 pub mod rules;
 pub mod salary;
 mod schema;
 pub mod search_expr;
 pub mod secret;
+pub mod security_transactions;
 pub mod sync_log;
 mod sync_merge;
 pub mod text;

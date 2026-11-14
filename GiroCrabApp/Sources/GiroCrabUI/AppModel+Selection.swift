@@ -189,6 +189,7 @@ extension AppModel {
         switch sidebarSelection {
         case .account(let id): return [id]
         case .group(let gid): return groups.first(where: { $0.id == gid })?.accounts.map(\.id) ?? []
+        case .bank(let key): return bankGroup(for: key)?.accounts.map(\.id) ?? []
         case .userGroup(let uuid): return userGroupAccountIDs(uuid)
         default: return []
         }
@@ -209,7 +210,7 @@ extension AppModel {
 
     /// Default of the date dialog before the user ever picked a range: last month.
     static var defaultCustomPeriod: (from: String, to: String) {
-        let (from, to) = Period.lastMonth.range
+        let (from, to) = Period.previousMonth().range
         return (from ?? DateText.iso(Date()), to ?? DateText.iso(Date()))
     }
 

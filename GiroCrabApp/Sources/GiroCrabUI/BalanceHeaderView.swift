@@ -2,71 +2,6 @@ import SwiftUI
 import Charts
 import GiroCrabCore
 
-/// Securities positions of a depot account (from the last sync).
-struct HoldingsCard: View {
-    @Environment(AppModel.self) private var model
-    let account: Account
-    @State private var holdings: [Holding] = []
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if !holdings.isEmpty {
-                Text("Positionen").font(.caption.weight(.semibold)).foregroundStyle(Theme.secondary)
-            }
-            ForEach(holdings.indices, id: \.self) { i in
-                let h = holdings[i]
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(h.name.isEmpty ? (h.isin.isEmpty ? h.wkn : h.isin) : h.name).lineLimit(1)
-                        Text("\(h.quantity.formatted(.number.precision(.fractionLength(0...4)))) × \(Money.format(h.currentPriceCents)) · \(h.isin.isEmpty ? h.wkn : h.isin)")
-                            .font(.caption2).foregroundStyle(Theme.secondary).lineLimit(1)
-                    }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 1) {
-                        Text(Money.format(h.valueCents)).monospacedDigit()
-                        if let gain = Self.calculatedGain(h) {
-                            Text("GuV (berechnet): \(Money.format(gain.cents)) (\(gain.percent.formatted(.number.precision(.fractionLength(2)))) %)")
-                                .font(.caption2).monospacedDigit()
-                                .foregroundStyle(gain.cents < 0 ? Color.red : Color.green)
-                        }
-                    }
-                }
-                .font(.callout)
-                .contextMenu {
-                    Button("Position kopieren", systemImage: "doc.on.doc") { copyToPasteboard(Self.line(h)) }
-                    Button("Alle Positionen kopieren", systemImage: "doc.on.doc.fill") {
-                        copyToPasteboard(holdings.map(Self.line).joined(separator: "\n"))
-                    }
-                }
-            }
-        }
-        .task(id: "\(account.id)-\(account.balanceCents)-\(account.balanceDate)") {
-            holdings = model.holdings(for: account.id)
-        }
-    }
-}
-
-extension HoldingsCard {
-    /// Derived from existing holdings fields; missing cost prices stay unknown.
-    static func calculatedGain(_ holding: Holding) -> (cents: Int64, percent: Double)? {
-        guard holding.quantity.isFinite, holding.quantity > 0,
-              holding.purchasePriceCents > 0, holding.valueCents >= 0 else { return nil }
-        let cost = (holding.quantity * Double(holding.purchasePriceCents)).rounded()
-        guard cost.isFinite, cost >= 1, cost < Double(Int64.max) else { return nil }
-        let (gain, overflow) = holding.valueCents.subtractingReportingOverflow(Int64(cost))
-        guard !overflow else { return nil }
-        return (gain, Double(gain) / cost * 100)
-    }
-
-    /// One position as plain text: name, ISIN/WKN, quantity, price, value.
-    static func line(_ h: Holding) -> String {
-        let id = h.isin.isEmpty ? h.wkn : h.isin
-        let qty = h.quantity.formatted(.number.precision(.fractionLength(0...4)))
-        return [h.name, id, "\(qty) × \(Money.format(h.currentPriceCents))", Money.format(h.valueCents)]
-            .filter { !$0.isEmpty }.joined(separator: " · ")
-    }
-}
-
 /// Right-click / long-press menu on the header's account info: copies bank details,
 /// IBAN or balance as plain text.
 struct AccountCopyMenu: View {
@@ -129,15 +64,16 @@ struct StreamHeaderCard: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(model.title).font(.title2.weight(.semibold)).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.7)
+                    Text(headerTitle).sensitive(account == nil ? .labels : .personal).appFont(.title2, weight: .semibold).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.7)
                     Group {
                         if let a = account {
                             Text([a.bankName, a.iban.isEmpty ? "" : formatIBAN(a.iban)].filter { !$0.isEmpty }.joined(separator: " · "))
+                                .sensitive()
                         } else {
                             Text(model.lastSyncText)
                         }
                     }
-                    .font(.caption)
+                    .appFont(.caption)
                     .foregroundStyle(Theme.secondary)
                 }
                 .contextMenu {
@@ -147,20 +83,21 @@ struct StreamHeaderCard: View {
                 // long-press is invisible on iPhone/iPad: show an explicit entry too
                 if let a = account {
                     Menu { AccountCopyMenu(account: a) } label: {
-                        Image(systemName: "doc.on.doc").font(.caption).foregroundStyle(Theme.secondary)
+                        Image(systemName: "doc.on.doc").appFont(.caption).foregroundStyle(Theme.secondary)
                     }
                     .accessibilityLabel("In Zwischenablage kopieren")
                 }
                 #endif
                 Spacer()
-                if let hb = model.headerBalance {
+                if let hb = headerBalance {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(Money.format(hb.cents))
-                            .font(.largeTitle.weight(.semibold).monospacedDigit())
+                            .sensitive()
+                            .appFont(.largeTitle, weight: .semibold, monospacedDigit: true)
                             .foregroundStyle(account?.kind == .loan ? Theme.loan : Theme.text)
                             .lineLimit(1)
                             .minimumScaleFactor(0.6)
-                        Text(hb.label).font(.caption).foregroundStyle(Theme.secondary)
+                        Text(hb.label).appFont(.caption).foregroundStyle(Theme.secondary)
                     }
                     .contextMenu {
                         Button("\(hb.label) kopieren", systemImage: "doc.on.doc") { copyToPasteboard(Money.clipboard(hb.cents)) }
@@ -172,12 +109,20 @@ struct StreamHeaderCard: View {
                 LoanProgressCard(account: a, compact: true)
             }
 
-            if let a = account, isDepot {
-                HoldingsCard(account: a)
-            }
-
             if isDepot {
+                // positions are cards below; the chart shows the value history
+                // (Sachwerte: of the selected item, if one is selected)
+                #if os(iOS)
+                BalanceChart(points: depotChartPoints) { _ in }
+                    .frame(height: 44)
+                #else
+                BalanceChart(points: depotChartPoints) { _ in }
+                    .frame(height: 72)
+                #endif
                 depotRow
+                    .popover(isPresented: $model.showCustomPeriod, arrowEdge: .bottom) {
+                        CustomPeriodForm()
+                    }
             } else {
                 if showStatistics && model.scope != .investments {
                     // iOS: 44 pt = HIG minimum hit region (the chart is tappable);
@@ -193,11 +138,11 @@ struct StreamHeaderCard: View {
 
                 #if os(iOS)
                 HStack(spacing: 10) {
-                    Text("Konsum \(kpiValue(-model.consumptionThisMonth))").foregroundStyle(Theme.outflow)
-                    Text("Einnahmen \(kpiValue(model.incomeThisMonth))").foregroundStyle(Theme.inflow)
+                    Text("Konsum \(kpiValue(-model.consumptionThisMonth))").foregroundStyle(Theme.outflow).sensitive()
+                    Text("Einnahmen \(kpiValue(model.incomeThisMonth))").foregroundStyle(Theme.inflow).sensitive()
                     Spacer(minLength: 0)
                 }
-                .font(.caption.weight(.medium).monospacedDigit())
+                .appFont(.caption, weight: .medium, monospacedDigit: true)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 #else
@@ -212,10 +157,11 @@ struct StreamHeaderCard: View {
         .card()
     }
 
-    /// Depot: no cash-flow KPIs, chart or period filters – only documents and a hint.
+    /// Depot: no cash-flow KPIs or booking filters – the period, documents and a hint.
     @ViewBuilder
     private var depotRow: some View {
         HStack(spacing: 12) {
+            periodMenu
             if let a = account {
                 Button { showDocuments = true } label: {
                     Label("Dokumente", systemImage: "doc.text")
@@ -224,16 +170,62 @@ struct StreamHeaderCard: View {
                 .sheet(isPresented: $showDocuments) { AccountDocumentsSheet(account: a) }
             }
             Spacer()
-            Text("Depot: Positionen statt Buchungen")
-                .lineLimit(1)
+            if let a = account, model.isTangible(a.id) {
+                if model.assetItems(a.id).contains(where: { $0.setup.priceSource != "manual" }) {
+                    Button {
+                        model.refreshAssetPrices(userInitiated: true)
+                    } label: {
+                        if model.assetStore.refreshing {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Label("Kurse aktualisieren", systemImage: "arrow.clockwise")
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Goldpreis jetzt abrufen")
+                }
+                Button {
+                    model.openAssetEditor(accountId: a.id)
+                } label: {
+                    Label("Sachwert hinzufügen", systemImage: "plus")
+                }
+                .buttonStyle(.borderless)
+            } else {
+                Text("Depot: Positionen statt Buchungen")
+                    .lineLimit(1)
+            }
         }
-        .font(.caption)
+        .appFont(.caption)
         .foregroundStyle(Theme.secondary)
     }
 
     /// The tiles belong to the selection: no stale sums while it loads.
     private func kpiValue(_ cents: Int64) -> String {
         model.isLoadingSelection ? "–" : Money.format(cents)
+    }
+
+    private var depotChartPoints: [DailyBalance] {
+        guard let a = account, model.selectedAssetItem(in: a.id) != nil else { return model.history }
+        // the item's history follows the selected period like the account chart
+        let (from, to) = model.periodRange
+        return model.assetStore.selectedHistory.filter { p in
+            (from.map { p.date >= $0 } ?? true) && (to.map { p.date <= $0 } ?? true)
+        }
+    }
+
+    /// Sachwerte: "Sachwerte · Auto (Kombi)" while an item is selected, else "Sachwerte · Gesamt".
+    private var headerTitle: String {
+        guard let a = account, model.isTangible(a.id) else { return model.title }
+        let part = model.selectedAssetItem(in: a.id)?.setup.name ?? String(localized: "Gesamt")
+        return "\(model.title) · \(part)"
+    }
+
+    /// The selected item's value instead of the account's.
+    private var headerBalance: (label: String, cents: Int64)? {
+        if let a = account, let item = model.selectedAssetItem(in: a.id) {
+            return (item.sold ? String(localized: "Verkauft") : String(localized: "Wert heute"), item.holding.valueCents)
+        }
+        return model.headerBalance
     }
 
     @ViewBuilder
@@ -276,34 +268,45 @@ struct StreamHeaderCard: View {
         }
     }
 
+    /// The period menu (also above depot charts).
+    private var periodMenu: some View {
+        @Bindable var model = model
+        return Group {
+            Menu {
+                // MoneyMoney's sections (#382), each an inline picker on the same selection
+                ForEach(Array(Period.menu().enumerated()), id: \.offset) { _, section in
+                    Picker("Zeitraum", selection: $model.interactivePeriod) {
+                        ForEach(section) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.inline)
+                    Divider()
+                }
+                // A Toggle gives the native menu checkmark while the custom range is active;
+                // choosing it always opens the date dialog.
+                Toggle(isOn: Binding(get: { model.period == .custom }, set: { _ in model.showCustomPeriod = true })) {
+                    if model.period == .custom {
+                        Text("Benutzerdefiniert: \(model.periodTitle) …")
+                    } else {
+                        Text("Benutzerdefiniert …")
+                    }
+                }
+            } label: {
+                // Single period control (GitHub #102): the menu is the only selector,
+                // so it always shows the active range.
+                Label(model.periodTitle, systemImage: "calendar")
+                    .lineLimit(1)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+        }
+    }
+
     @ViewBuilder
     private var filterContent: some View {
         @Bindable var model = model
         let account = self.account
         HStack(spacing: 12) {
-                Menu {
-                    Picker("Zeitraum", selection: $model.interactivePeriod) {
-                        ForEach(Period.presets) { Text($0.title).tag($0) }
-                    }
-                    .pickerStyle(.inline)
-                    Divider()
-                    // A Toggle gives the native menu checkmark while the custom range is active;
-                    // choosing it always opens the date dialog.
-                    Toggle(isOn: Binding(get: { model.period == .custom }, set: { _ in model.showCustomPeriod = true })) {
-                        if model.period == .custom {
-                            Text("Benutzerdefiniert: \(model.periodTitle) …")
-                        } else {
-                            Text("Benutzerdefiniert …")
-                        }
-                    }
-                } label: {
-                    // Single period control (GitHub #102): the menu is the only selector,
-                    // so it always shows the active range.
-                    Label(model.periodTitle, systemImage: "calendar")
-                        .lineLimit(1)
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
+                periodMenu
                 // One filter menu (status + income/expenses) keeps the row narrow.
                 Menu {
                     // Inline pickers show no title in a menu: name each group with a section header.
@@ -354,20 +357,20 @@ struct StreamHeaderCard: View {
                 #if os(iOS)
                 if sizeClass != .compact {
                     Text("\(model.bookingCountLabel) Buchungen")
-                        .font(.caption)
+                        .appFont(.caption)
                         .foregroundStyle(Theme.secondary)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
                 }
                 #else
                 Text("\(model.bookingCountLabel) Buchungen")
-                    .font(.caption)
+                    .appFont(.caption)
                     .foregroundStyle(Theme.secondary)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
                 #endif
             }
-        .font(.caption)
+        .appFont(.caption)
         .foregroundStyle(Theme.secondary)
     }
 }
@@ -385,19 +388,20 @@ struct KPI: View {
         // amounts of all tiles line up (HIG: align elements, consistent spacing).
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 3) {
-                Text(title).font(.caption.weight(.medium)).foregroundStyle(Theme.secondary)
+                Text(title).appFont(.caption, weight: .medium).foregroundStyle(Theme.secondary)
                     .lineLimit(1).minimumScaleFactor(0.85)
                 if disclosure {
                     Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.bold)).imageScale(.small)
+                        .appFont(.caption2, weight: .bold).imageScale(.small)
                         .foregroundStyle(Theme.tertiary)
                         .accessibilityHidden(true)
                 }
             }
-            Text(value).font(.title3.weight(.semibold).monospacedDigit()).foregroundStyle(tint)
+            Text(value).appFont(.title3, weight: .semibold, monospacedDigit: true).foregroundStyle(tint)
                 .lineLimit(1).minimumScaleFactor(0.75)
+                .sensitive()
             Spacer(minLength: 2)
-            Text(subtitle).font(.caption2).foregroundStyle(Theme.tertiary)
+            Text(subtitle).appFont(.caption2).foregroundStyle(Theme.tertiary)
                 .lineLimit(2)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -744,16 +748,19 @@ struct BalanceChart: View {
                 if let d = v.as(Double.self) {
                     // fixed minimum width: changing values never shift the plot sideways
                     Text(verbatim: Self.compactEuros(d))
-                        .font(.caption2.monospacedDigit())
+                        .sensitive()
+                        .appFont(.caption2, monospacedDigit: true)
                         .foregroundStyle(Theme.tertiary)
-                        .frame(minWidth: axisLabelWidth, alignment: .leading)
+                        .frame(minWidth: axisLabelWidth * textScale, alignment: .leading)
                 }
             }
         }
     }
 
     /// Fits "-88.800 €" in Caption 2; longer labels (millions) widen it only then.
+    /// ScaledMetric follows Dynamic Type (iOS), textScale the app setting (macOS).
     @ScaledMetric(relativeTo: .caption2) private var axisLabelWidth: CGFloat = 50
+    @Environment(\.textScale) private var textScale
 
     /// Zero first (the reference), then max and min, each only if it keeps its distance.
     static func axisValues(min lo: Double, max hi: Double, domain: ClosedRange<Double>) -> [Double] {
@@ -786,35 +793,41 @@ struct BalanceChart: View {
     @AxisContentBuilder private func xAxis(span: Double, centered: Bool = false) -> some AxisContent {
         if span > 400 {
             // long periods: years, every 1/2/5/10 so the labels never crowd
-            let years = Self.axisStride(units: span / 365.25, width: chartWidth, labelWidth: 64, steps: [1, 2, 5, 10, 20])
-            AxisMarks(values: .stride(by: .year, count: years)) { _ in
+            let years = Self.axisStride(units: span / 365.25, width: chartWidth, labelWidth: 64 * textScale, steps: [1, 2, 5, 10, 20])
+            AxisMarks(values: .stride(by: .year, count: years)) { v in
                 // centred = midway to the next label: only right if that is the next year
-                AxisValueLabel(format: .dateTime.year(), centered: centered && years == 1)
+                AxisValueLabel(centered: centered && years == 1) { Self.axisDate(v, .dateTime.year()) }
                     .foregroundStyle(Theme.tertiary)
             }
         } else if span < 62 {
             // short periods (this/last month): weekly day labels
-            let days = Self.axisStride(units: span, width: chartWidth, labelWidth: 64, steps: [7, 14, 28])
-            AxisMarks(values: .stride(by: .day, count: days)) { _ in
-                AxisValueLabel(format: .dateTime.day().month(.abbreviated))
+            let days = Self.axisStride(units: span, width: chartWidth, labelWidth: 64 * textScale, steps: [7, 14, 28])
+            AxisMarks(values: .stride(by: .day, count: days)) { v in
+                AxisValueLabel { Self.axisDate(v, .dateTime.day().month(.abbreviated)) }
                     .foregroundStyle(Theme.tertiary)
             }
         } else {
-            let months = Self.axisStride(units: span / 30.44, width: chartWidth, labelWidth: 44, steps: [1, 2, 3, 6])
-            AxisMarks(values: .stride(by: .month, count: months)) { _ in
-                AxisValueLabel(format: .dateTime.month(.abbreviated), centered: centered && months == 1)
+            let months = Self.axisStride(units: span / 30.44, width: chartWidth, labelWidth: 44 * textScale, steps: [1, 2, 3, 6])
+            AxisMarks(values: .stride(by: .month, count: months)) { v in
+                AxisValueLabel(centered: centered && months == 1) { Self.axisDate(v, .dateTime.month(.abbreviated)) }
                     .foregroundStyle(Theme.tertiary)
             }
         }
     }
 
+    /// `AxisValueLabel(format:)` keeps the system size; this follows the text size setting.
+    private static func axisDate(_ value: AxisValue, _ format: Date.FormatStyle) -> some View {
+        Text(verbatim: value.as(Date.self)?.formatted(format) ?? "").appFont(.caption2).fixedSize()
+    }
+
     private func readout(_ title: String, prefix: String = "", cents: Int64) -> some View {
         VStack(spacing: 1) {
             Text(title)
-                .font(.caption2)
+                .appFont(.caption2)
                 .foregroundStyle(Theme.secondary)
             Text(verbatim: prefix + Money.format(cents))
-                .font(.caption.weight(.semibold).monospacedDigit())
+                .sensitive()
+                .appFont(.caption, weight: .semibold, monospacedDigit: true)
                 .foregroundStyle(cents < 0 ? Theme.outflow : Theme.text)
         }
         .padding(.horizontal, 7)

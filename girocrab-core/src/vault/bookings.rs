@@ -31,6 +31,23 @@ fn is_own_transfer(t: &Booking, own_ibans: &std::collections::HashSet<String>) -
     !iban.is_empty() && own_ibans.contains(&iban)
 }
 
+/// Compact search text that is an IBAN (CCdd…) or a digit-only account number.
+fn is_account_number_query(compact: &str) -> bool {
+    if compact.len() < 6 || !compact.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return false;
+    }
+    let b = compact.as_bytes();
+    if b.len() >= 15
+        && b[0].is_ascii_uppercase()
+        && b[1].is_ascii_uppercase()
+        && b[2].is_ascii_digit()
+        && b[3].is_ascii_digit()
+    {
+        return true;
+    }
+    compact.chars().all(|c| c.is_ascii_digit())
+}
+
 /// WHERE clause "booking `t` belongs to the categories `cat_match`" (e.g. `= ?3`,
 /// `IS NULL`), split-aware like `planning::EFFECTIVE_SQL`: an unsplit booking by
 /// its own category, a split booking only by the categories of its parts.
@@ -184,30 +201,75 @@ impl Vault {
             .map(|s| s.trim())
             .filter(|s| !s.is_empty())
         {
-            let mut ors = Vec::new();
-            for term in q.split_whitespace() {
+            // Spaced IBANs / account numbers ("DE89 3704 …"): one compact match
+            // against counterparty and own-account numbers beats AND-of-fragments.
+            // Only IBAN-shaped (CCdd…) or digit-only queries – not "Miete 500".
+            let compact_all: String = q
+                .chars()
+                .filter(|c| !c.is_whitespace())
+                .collect::<String>()
+                .to_uppercase();
+            let account_like = is_account_number_query(&compact_all);
+            if account_like {
                 let like = format!(
                     "%{}%",
-                    term.replace('\\', "\\\\")
+                    compact_all
+                        .replace('\\', "\\\\")
                         .replace('%', "\\%")
                         .replace('_', "\\_")
                 );
                 args.push(Box::new(like));
                 let n = args.len();
-                let mut alt = format!(
-                    "(t.counterparty LIKE ?{n} ESCAPE '\\' OR t.purpose LIKE ?{n} ESCAPE '\\' OR t.booking_text LIKE ?{n} ESCAPE '\\' \
-                     OR t.counterparty_iban LIKE ?{n} ESCAPE '\\' OR cat.name LIKE ?{n} ESCAPE '\\' OR a.name LIKE ?{n} ESCAPE '\\'"
-                );
-                if term.chars().any(|c| c.is_ascii_digit()) {
-                    if let Ok(cents) = parse_cents(term) {
-                        args.push(Box::new(cents.abs()));
-                        alt.push_str(&format!(" OR ABS(t.amount_cents) = ?{}", args.len()));
+                wh.push(format!(
+                    "(REPLACE(UPPER(t.counterparty_iban), ' ', '') LIKE ?{n} ESCAPE '\\' \
+                     OR REPLACE(UPPER(IFNULL(a.iban, '')), ' ', '') LIKE ?{n} ESCAPE '\\' \
+                     OR REPLACE(UPPER(IFNULL(a.account_number, '')), ' ', '') LIKE ?{n} ESCAPE '\\')"
+                ));
+            } else {
+                let mut ors = Vec::new();
+                for term in q.split_whitespace() {
+                    let like = format!(
+                        "%{}%",
+                        term.replace('\\', "\\\\")
+                            .replace('%', "\\%")
+                            .replace('_', "\\_")
+                    );
+                    args.push(Box::new(like));
+                    let n = args.len();
+                    let mut alt = format!(
+                        "(t.counterparty LIKE ?{n} ESCAPE '\\' OR t.purpose LIKE ?{n} ESCAPE '\\' OR t.booking_text LIKE ?{n} ESCAPE '\\' \
+                         OR t.counterparty_iban LIKE ?{n} ESCAPE '\\' OR cat.name LIKE ?{n} ESCAPE '\\' OR a.name LIKE ?{n} ESCAPE '\\'"
+                    );
+                    let compact: String = term
+                        .chars()
+                        .filter(|c| !c.is_whitespace())
+                        .collect::<String>()
+                        .to_uppercase();
+                    if compact.chars().any(|c| c.is_ascii_digit()) {
+                        let clike = format!(
+                            "%{}%",
+                            compact
+                                .replace('\\', "\\\\")
+                                .replace('%', "\\%")
+                                .replace('_', "\\_")
+                        );
+                        args.push(Box::new(clike));
+                        let c = args.len();
+                        alt.push_str(&format!(
+                            " OR REPLACE(UPPER(t.counterparty_iban), ' ', '') LIKE ?{c} ESCAPE '\\' \
+                             OR REPLACE(UPPER(IFNULL(a.iban, '')), ' ', '') LIKE ?{c} ESCAPE '\\' \
+                             OR REPLACE(UPPER(IFNULL(a.account_number, '')), ' ', '') LIKE ?{c} ESCAPE '\\'"
+                        ));
+                        if let Ok(cents) = parse_cents(term) {
+                            args.push(Box::new(cents.abs()));
+                            alt.push_str(&format!(" OR ABS(t.amount_cents) = ?{}", args.len()));
+                        }
                     }
+                    alt.push(')');
+                    ors.push(alt);
                 }
-                alt.push(')');
-                ors.push(alt);
+                wh.push(ors.join(" AND "));
             }
-            wh.push(ors.join(" AND "));
         }
         let where_sql = wh.join(" AND ");
         Ok((cte, where_sql, args, share_sql))
@@ -416,6 +478,11 @@ impl Vault {
             }
             enrich(&mut t);
             t.is_salary = crate::salary::is_salary(&t, &salary_ibans);
+            // A salary stays income although its booking text names a transfer
+            // (comdirect: "Übertrag / Überweisung"); a transfer category still wins.
+            if t.is_salary && t.flow == FlowKind::Transfer {
+                t.flow = FlowKind::Income;
+            }
             if is_own_transfer(&t, &own_ibans) {
                 t.flow = FlowKind::Transfer;
             }
@@ -516,6 +583,22 @@ impl Vault {
         let mut stmt = db.prepare("SELECT booking_date FROM transactions WHERE id = ?1")?;
         let mut rows = stmt.query_map([booking_id], |r| r.get::<_, String>(0))?;
         Ok(rows.next().transpose()?)
+    }
+
+    /// Distinct counterparty names of all bookings, most recent first, at most
+    /// `limit` (bug report #301: a log line naming a payee is scrubbed of it,
+    /// whatever the list currently shows).
+    pub fn counterparty_names(&self, limit: u32) -> Result<Vec<String>, CoreError> {
+        let db = self.db()?;
+        let mut stmt = db.prepare(
+            "SELECT counterparty FROM transactions
+              WHERE deleted_ms IS NULL AND counterparty <> ''
+              GROUP BY counterparty ORDER BY MAX(booking_date) DESC LIMIT ?1",
+        )?;
+        let names = stmt
+            .query_map([limit], |r| r.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(names)
     }
 
     pub fn set_transaction_checked(
@@ -640,6 +723,34 @@ mod paging_tests {
         let v = Vault::open(p.to_string_lossy().to_string(), vec![7u8; 32]).unwrap();
         v.seed_demo_data().unwrap();
         (v, p)
+    }
+
+    #[test]
+    fn counterparty_names_are_distinct_newest_first_and_limited() {
+        let (v, p) = demo();
+        let all = v
+            .list_transactions(BookingFilter::default())
+            .unwrap()
+            .transactions;
+        let names = v.counterparty_names(1000).unwrap();
+        let mut unique = names.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), names.len(), "distinct");
+        assert!(!names.iter().any(String::is_empty));
+        for b in all.iter().filter(|b| !b.counterparty.is_empty()) {
+            assert!(
+                names.contains(&b.counterparty),
+                "{} missing",
+                b.counterparty
+            );
+        }
+        let newest = all.iter().find(|b| !b.counterparty.is_empty()).unwrap();
+        let newest_date = &newest.booking_date;
+        let first = all.iter().find(|b| b.counterparty == names[0]).unwrap();
+        assert_eq!(&first.booking_date, newest_date);
+        assert_eq!(v.counterparty_names(3).unwrap().len(), 3);
+        let _ = std::fs::remove_file(p);
     }
 
     #[test]
@@ -868,6 +979,43 @@ mod paging_tests {
     }
 
     #[test]
+    fn search_finds_spaced_iban_and_own_account_number() {
+        let (v, p) = demo();
+        let accounts = v.list_accounts().unwrap();
+        let giro = accounts
+            .iter()
+            .find(|a| a.iban == "DE89370400440532013000")
+            .expect("demo giro");
+        let spaced = "DE89 3704 0044 0532 0130 00";
+        let by_iban = v
+            .list_transactions(BookingFilter {
+                search: Some(spaced.into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(
+            by_iban.total_count > 0,
+            "spaced IBAN should match the own account"
+        );
+        assert!(
+            by_iban.transactions.iter().all(|b| b.account_id == giro.id),
+            "hits must belong to the IBAN's account"
+        );
+        let by_number = v
+            .list_transactions(BookingFilter {
+                search: Some("0532 0130 00".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(by_number.total_count > 0);
+        assert!(by_number
+            .transactions
+            .iter()
+            .all(|b| b.account_id == giro.id));
+        let _ = std::fs::remove_file(p);
+    }
+
+    #[test]
     fn checked_filter_selects_new_or_checked_bookings() {
         let (v, p) = demo();
         let all = v
@@ -1054,5 +1202,31 @@ mod own_transfer_tests {
             v.selection_flow(vec![], None, None).unwrap().income_cents,
             0
         );
+    }
+
+    /// comdirect books incoming transfers as "Übertrag / Überweisung": a
+    /// salary must not become a transfer by that booking text.
+    #[test]
+    fn salary_with_transfer_booking_text_is_income() {
+        let (_d, v, ids) = vault_with(&[
+            (
+                "UHB Software",
+                4254_94,
+                "LOHN / GEHALT 10/26 EREF:",
+                Some("Salary"),
+            ),
+            ("UHB Software", 4254_94, "LOHN / GEHALT 09/26 EREF:", None),
+        ]);
+        v.db()
+            .unwrap()
+            .execute_batch(
+                "UPDATE transactions SET booking_text = 'Übertrag / Überweisung',
+                     counterparty_iban = 'DE75512108001245126199'",
+            )
+            .unwrap();
+        assert_eq!(flow_of(&v, ids[0]), FlowKind::Income);
+        assert_eq!(flow_of(&v, ids[1]), FlowKind::Income);
+        let page = v.list_transactions(BookingFilter::default()).unwrap();
+        assert_eq!(page.income_cents, 2 * 4254_94);
     }
 }

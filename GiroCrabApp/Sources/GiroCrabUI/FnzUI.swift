@@ -182,25 +182,34 @@ struct FnzWebSheet: View {
     @State private var progress = ""
     @State private var notice: String?
     @State private var task: Task<Void, Never>?
+    /// Accounts another login already delivers: asked before the documents are downloaded (#346).
+    @State private var choosing = false
+    @State private var askedInFlow = false
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("\(connection.displayName) – FNZ Bank").font(.headline)
-                    if running { Text(progress).font(.caption) }
-                    else if let notice { Text(notice).font(.caption).foregroundStyle(.orange) }
+                    Text("\(connection.displayName) – FNZ Bank").appFont(.headline)
+                    if running { Text(progress).appFont(.caption) }
+                    else if let notice { Text(notice).appFont(.caption).foregroundStyle(.orange) }
                     else if let blocked = browser.blockedHost {
-                        Text("Unsichere Seite blockiert (\(blocked)) – nur HTTPS-Seiten werden geöffnet.").font(.caption).foregroundStyle(.orange)
+                        Text("Unsichere Seite blockiert (\(blocked)) – nur HTTPS-Seiten werden geöffnet.").appFont(.caption).foregroundStyle(.orange)
                     }
-                    else if ready { Text("Angemeldet – Konten, Fondspositionen, Umsätze und Postkorb können abgerufen werden.").font(.caption) }
-                    else { Text("Melden Sie sich bei FNZ an und bestätigen Sie in FNZsecure.").font(.caption) }
+                    else if ready { Text("Angemeldet – Konten, Fondspositionen, Umsätze und Postkorb können abgerufen werden.").appFont(.caption) }
+                    else { Text("Melden Sie sich bei FNZ an und bestätigen Sie in FNZsecure.").appFont(.caption) }
                 }
                 Spacer()
                 if running || browser.loading { ProgressView().controlSize(.small) }
             }.padding(14)
             Divider()
             PortalWebView(browser: browser).macFrame(minWidth: 760, minHeight: 620)
+                .overlay {
+                    if choosing {
+                        AccountSelectionPanel(connection: connection) { choosing = false }
+                            .background(.background)
+                    }
+                }
             Divider()
             HStack {
                 Button("Schließen", role: .cancel) { task?.cancel(); close() }
@@ -256,6 +265,14 @@ struct FnzWebSheet: View {
                 let totalsOnly = snapshot.data(using: .utf8).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }?["totalsOnly"] as? Int ?? 0
                 var downloaded = 0
                 var failed = 0
+                // Held-back accounts: ask now, so their documents are fetched (or skipped) accordingly.
+                let open = try await pin.run { try $0.pendingAccountSelectionConnections() }
+                if open.contains(connectionId) {
+                    askedInFlow = true
+                    progress = String(localized: "Auswahl der Konten …")
+                    choosing = true
+                    while choosing { try await Task.sleep(nanoseconds: 200_000_000) }
+                }
                 if includeDocuments {
                     progress = String(localized: "Postkorb und Archiv auflisten …")
                     let list = try await run(FnzScripts.documents)
@@ -302,8 +319,12 @@ struct FnzWebSheet: View {
             // partial failure before a vault file copy – in the vault they were written to.
             await pin.checkpoint()
             running = false
+            choosing = false
             model.documentsVersion += 1
             model.reloadAll()
+            // Skipped ("Später") accounts were already offered in this run.
+            if !askedInFlow { model.checkPendingAccountSelection() }
+            askedInFlow = false
         }
     }
 }

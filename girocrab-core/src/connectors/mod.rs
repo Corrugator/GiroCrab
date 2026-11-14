@@ -32,6 +32,8 @@ pub mod scalable;
 pub mod template;
 pub mod trade_republic;
 
+pub(crate) mod account_selection;
+pub use account_selection::ConnectionAccountChoice;
 mod catalog;
 mod persist;
 mod sync_session;

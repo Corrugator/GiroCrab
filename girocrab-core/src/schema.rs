@@ -14,6 +14,9 @@
 //!   `accounts.balance_derived`.
 //! - 11: sync log (#238): table `sync_log`, local to the device.
 //! - 12: SEPA references on bookings: `end_to_end_id`, `mandate_id`, `creditor_id`.
+//! - 13: Sachwerte (#87): items, dated quantities and values, metal prices.
+//! - 14: securities transactions (#314): table `security_transactions`, extra
+//!   position fields on `holdings` (previous day, profit/loss, custody type).
 //!
 //! Schema changes are a new step at the end of [`STEPS`]; never edit an
 //! existing step. After a bump, run
@@ -38,11 +41,66 @@ const STEPS: &[Step] = &[
     Step::Sql(""),
     Step::Sql(""),
     Step::Sql(""),
-    Step::Hook(repair_to_v8),     // 9
-    Step::Hook(opening_balances), // 10
-    Step::Sql(SYNC_LOG),          // 11
-    Step::Hook(sepa_refs),        // 12
+    Step::Hook(repair_to_v8),          // 9
+    Step::Hook(opening_balances),      // 10
+    Step::Sql(SYNC_LOG),               // 11
+    Step::Hook(sepa_refs),             // 12
+    Step::Hook(tangible_assets),       // 13
+    Step::Hook(security_transactions), // 14
 ];
+
+/// Step 14 (#314): securities transactions (buy, sell, dividend, fee, tax …)
+/// of a depot, beside the cash bookings: they never count as cash flow and
+/// have no category. `UNIQUE(account_id, external_id)` is the merge key.
+/// `cash_transaction_id` is the matching cash booking on a settlement account
+/// (local id, set by `link_cash_bookings`, not merged). Also the position
+/// fields the banks report besides the stock. Idempotent like the steps above.
+fn security_transactions(conn: &Connection) -> CoreResult<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS security_transactions (
+            id                     INTEGER PRIMARY KEY,
+            account_id             INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+            external_id            TEXT    NOT NULL,
+            booking_date           TEXT    NOT NULL,
+            settlement_date        TEXT    NOT NULL DEFAULT '',
+            isin                   TEXT    NOT NULL DEFAULT '',
+            wkn                    TEXT    NOT NULL DEFAULT '',
+            name                   TEXT    NOT NULL DEFAULT '',
+            direction              TEXT    NOT NULL DEFAULT 'other', -- buy | sell | dividend | fee | tax | other
+            quantity               REAL    NOT NULL DEFAULT 0,
+            price_cents            INTEGER NOT NULL DEFAULT 0,
+            currency               TEXT    NOT NULL DEFAULT 'EUR',
+            value_cents            INTEGER NOT NULL DEFAULT 0,
+            fees_cents             INTEGER NOT NULL DEFAULT 0,
+            taxes_cents            INTEGER NOT NULL DEFAULT 0,
+            accrued_interest_cents INTEGER NOT NULL DEFAULT 0,
+            fx_rate                REAL,
+            booking_text           TEXT    NOT NULL DEFAULT '',
+            cash_transaction_id    INTEGER REFERENCES transactions(id) ON DELETE SET NULL,
+            changed_ms             INTEGER NOT NULL DEFAULT 0,
+            deleted_ms             INTEGER,
+            UNIQUE(account_id, external_id)
+        );
+        CREATE INDEX IF NOT EXISTS security_transactions_account
+            ON security_transactions(account_id, booking_date, deleted_ms);
+        CREATE INDEX IF NOT EXISTS security_transactions_isin
+            ON security_transactions(isin, deleted_ms);",
+    )?;
+    for (col, def) in [
+        ("prev_day_price_cents", "INTEGER"),
+        ("prev_day_value_cents", "INTEGER"),
+        ("profit_loss_purchase_cents", "INTEGER"),
+        ("profit_loss_purchase_rel", "REAL"),
+        ("profit_loss_prev_day_cents", "INTEGER"),
+        ("profit_loss_prev_day_rel", "REAL"),
+        ("custody_type", "TEXT NOT NULL DEFAULT ''"),
+    ] {
+        if !has_column(conn, "holdings", col)? {
+            conn.execute_batch(&format!("ALTER TABLE holdings ADD COLUMN {col} {def};"))?;
+        }
+    }
+    Ok(())
+}
 
 /// Step 12: SEPA references of a booking, bank-independent (end-to-end id,
 /// direct-debit mandate reference, creditor id). "" = unknown. Idempotent:
@@ -56,6 +114,15 @@ fn sepa_refs(conn: &Connection) -> CoreResult<()> {
         }
     }
     Ok(())
+}
+
+/// Step 13 (#87): Sachwerte – items, dated quantities and values, metal
+/// prices. Idempotent: vaults of a development build of the feature already
+/// carry the tables, maybe without later columns. Those builds numbered
+/// this step 12, so such a vault never ran [`sepa_refs`]: run it here as well.
+fn tangible_assets(conn: &Connection) -> CoreResult<()> {
+    sepa_refs(conn)?;
+    crate::assets::migrate(conn)
 }
 
 /// Step 11 (#238): the Abrufprotokoll. No foreign key: the log outlives a
@@ -491,7 +558,7 @@ mod tests {
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
         assert_eq!(v, SCHEMA_VERSION);
-        assert_eq!(SCHEMA_VERSION, 12);
+        assert_eq!(SCHEMA_VERSION, 14);
     }
 
     #[test]

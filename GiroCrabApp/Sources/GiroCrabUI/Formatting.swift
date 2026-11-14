@@ -27,6 +27,12 @@ enum Theme {
     static let outflow = Color(light: "#0F172A", dark: "#F1F5F9")
     static let inflow = Color(light: "#059669", dark: "#34D399")
     static let inflowBadge = Color(light: "#ECFDF5", dark: "#064E3B")
+    /// Order-account charge colour: the red counterpart of `inflow`, paired
+    /// with `outflowBadge` so badged charges and refunds read symmetrically.
+    static let charge = Color(light: "#DC2626", dark: "#F87171")
+    /// Red counterpart of `inflowBadge`, so the order-account rows can badge
+    /// charges and refunds symmetrically (colour = direction, no sign).
+    static let outflowBadge = Color(light: "#FEF2F2", dark: "#7F1D1D")
     /// The app accent colour (HIG › Color › App accent colors): GiroCrab blue,
     /// defined as `AccentColor` in the asset catalog, so buttons, toggles and
     /// focus rings use it too. With the system default "Multicolour" everyone
@@ -356,6 +362,20 @@ enum ReadableColor {
         }
         return (hue(h + 1 / 3), hue(h), hue(h - 1 / 3))
     }
+}
+
+extension BankConnection {
+    /// Colour and monogram of well-known banks that run on the generic FinTS
+    /// connector (keyed by BLZ); everything else uses its connector's.
+    private var fintsBrand: (tintHex: String, monogram: String)? {
+        guard connector == .finTsGeneric else { return nil }
+        switch bankCode {
+        case "76030080", "70120400": return ("#0A7EA4", "CB") // Consorsbank
+        default: return nil
+        }
+    }
+    var tint: Color { fintsBrand.map { Color.readable(hex: $0.tintHex) } ?? connector.tint }
+    var monogram: String { fintsBrand?.monogram ?? connector.monogram }
 }
 
 extension ConnectorKind {

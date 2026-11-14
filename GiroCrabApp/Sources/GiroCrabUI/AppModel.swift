@@ -21,6 +21,8 @@ public final class AppModel {
     private(set) var vault: Vault?
     /// Manual loans (GitHub #36), see ManualLoansUI.swift.
     @ObservationIgnored let loanStore = ManualLoanStore()
+    /// Sachwerte (GitHub #87), see TangibleAssetsUI.swift.
+    @ObservationIgnored let assetStore = AssetStore()
     var vaultState: VaultState = .locked
     /// The vault is open and the lock screen shows the crab's unlock hop for a moment.
     var unlockCelebrating = false
@@ -55,6 +57,8 @@ public final class AppModel {
     var rules: [Rule] = []
     var history: [DailyBalance] = []
     var connections: [BankConnection] = []
+    /// Login with accounts that another login already delivers: asks which to fetch (#346).
+    var accountSelectionConnection: BankConnection?
     var settings: [SettingEntry] = []
     /// "off" (default), "duckduckgo" or "google" – normalised by the core
     /// (legacy "1"/"true" from the old toggle count as "google").
@@ -141,6 +145,8 @@ public final class AppModel {
         }
     }
     var searchText: String = "" { didSet { scheduleSearch() } }
+    /// Filters the accounts section of the sidebar (name, owner, IBAN / account number).
+    var sidebarAccountSearch: String = ""
     var selectedBookingID: Booking.ID? {
         didSet {
             if stickyBooking?.id != selectedBookingID { stickyBooking = nil }
@@ -174,8 +180,19 @@ public final class AppModel {
     var collapsedGroups: Set<Int64> = Set(UserDefaults.standard.array(forKey: "sidebar.collapsedKindGroups") as? [Int64] ?? []) {
         didSet { UserDefaults.standard.set(Array(collapsedGroups), forKey: "sidebar.collapsedKindGroups") }
     }
+    /// „Alle Konten“ (the sidebar's root row) folded away with every group.
+    var allAccountsCollapsed: Bool = UserDefaults.standard.bool(forKey: AppModel.allAccountsCollapsedKey) {
+        didSet { UserDefaults.standard.set(allAccountsCollapsed, forKey: AppModel.allAccountsCollapsedKey) }
+    }
+    /// The sidebar's category tree, „Ohne Kategorie“ included, folded away under its header.
+    var categoriesCollapsed: Bool = UserDefaults.standard.bool(forKey: "sidebar.categoriesCollapsed") {
+        didSet { UserDefaults.standard.set(categoriesCollapsed, forKey: "sidebar.categoriesCollapsed") }
+    }
     var collapsedUserGroups: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "sidebar.collapsedUserGroups") ?? []) {
         didSet { UserDefaults.standard.set(Array(collapsedUserGroups), forKey: "sidebar.collapsedUserGroups") }
+    }
+    var collapsedBankGroups: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "sidebar.collapsedBankGroups") ?? []) {
+        didSet { UserDefaults.standard.set(Array(collapsedBankGroups), forKey: "sidebar.collapsedBankGroups") }
     }
     /// Archived accounts stay in their group; this hides their sidebar rows.
     var showArchivedAccounts: Bool = UserDefaults.standard.object(forKey: "sidebar.showArchived") as? Bool ?? true {
@@ -214,6 +231,9 @@ public final class AppModel {
     var ruleDraft: Rule?
     var showSettings = false
     var showCommandPalette = false
+    /// Set while the bug report takes its screenshot (#301): the main window
+    /// draws `.sensitive()` content as placeholders.
+    var reportRedaction: ReportRedaction = []
     /// The balance chart has keyboard focus (Return there jumps to its day,
     /// instead of editing the selected booking's note).
     @ObservationIgnored var chartHasKeyboardFocus = false
@@ -429,6 +449,11 @@ public final class AppModel {
         }
         if options.demoSeed {
             openDemoVault()
+            if options.demoSheet == "account-selection" || options.demoSettings == "banks:select" {
+                // a second login reaching accounts the first one delivers (#346)
+                _ = try? vault?.seedDemoAccountSelection()
+                reloadAll()
+            }
             switch options.initialView {
             case "alltag": scope = .everyday
             case "sparplaene", "sparpläne", "investments": scope = .investments
@@ -447,6 +472,11 @@ public final class AppModel {
             reloadBookings()
             if let q = options.pickBooking, let b = bookings.first(where: { $0.merchantName.lowercased().contains(q) || $0.counterparty.lowercased().contains(q) }) {
                 selectedBookingID = b.id
+            }
+            // Sachwerte (#87): --pick also selects an item by name
+            if let q = options.pickBooking, case .account(let id) = sidebarSelection, isTangible(id),
+               let item = assetItems(id).first(where: { $0.setup.name.lowercased().contains(q) }) {
+                selectAssetItem(item.id)
             }
             if let sheet = options.demoSheet {
                 Task { @MainActor [weak self] in
@@ -476,6 +506,9 @@ public final class AppModel {
     /// Screenshot helper: open a sheet pre-filled with fictional data.
     private func presentDemoSheet(_ name: String) {
         switch name {
+        case "account-selection":
+            // choice of accounts another login already delivers (#346)
+            accountSelectionConnection = connections.last
         case "icon-color":
             // the "Symbol & Farbe" popover of the first account (#167)
             if let a = allAccounts.first { iconColorTarget = .account(a.id) }
@@ -489,7 +522,7 @@ public final class AppModel {
             }
         case "print":
             // Print dialog (GitHub #53) on last month's demo bookings.
-            period = .lastMonth
+            period = Period.previousMonth()
             showPrintSheet = true
         case "transfer", "transfer-confirm":
             if let a = transferAccounts.first { sidebarSelection = .account(a.id) }
@@ -640,6 +673,8 @@ public final class AppModel {
         selectedBookingID = nil
         sidebarSelection = .allAccounts
         reloadAll()
+        // Sachwerte: the demo's gold items load real prices from the API
+        refreshAssetPrices()
         #if os(macOS)
         selectedBookingID = (bookings.first(where: { $0.flow == .consumption && $0.documentCount > 0 }) ?? bookings.first(where: { $0.flow == .consumption }))?.id
         #endif
@@ -662,6 +697,7 @@ public final class AppModel {
             selectedBookingID = nil
             sidebarSelection = .allAccounts
             reloadAll()
+            refreshAssetPrices()
             #if os(macOS)
             // iPhone: a preselected booking would push the detail page over the list.
             selectedBookingID = (bookings.first(where: { $0.flow == .consumption && $0.documentCount > 0 }) ?? bookings.first(where: { $0.flow == .consumption }))?.id

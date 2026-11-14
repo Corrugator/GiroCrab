@@ -152,6 +152,14 @@ impl Vault {
             "DELETE FROM settings WHERE key = ?1",
             [crate::connections::pin_key(connection_id)],
         )?;
+        // the account choice of this login (#346): a re-added login starts fresh
+        db.execute(
+            "DELETE FROM settings WHERE key = ?1",
+            [crate::connectors::account_selection::key(
+                db,
+                connection_id,
+            )?],
+        )?;
         Ok(())
     }
 }
@@ -327,6 +335,11 @@ impl Vault {
         let tx = db.unchecked_transaction()?;
         Self::purge_connection(&tx, connection_id)?;
         tx.commit()?;
+        drop(db);
+        self.pending_account_fetches
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&connection_id);
         Ok(())
     }
 
@@ -375,8 +388,14 @@ impl Vault {
 
     pub fn list_holdings(&self, account_id: i64) -> Result<Vec<Holding>, CoreError> {
         let db = self.db()?;
+        // Sachwerte (#87): the items, valued today, in the same shape
+        if crate::assets::is_tangible(&db, account_id)? {
+            return crate::assets::holdings(&db, account_id);
+        }
         let mut q = db.prepare(
-            "SELECT isin, wkn, name, quantity, current_price_cents, purchase_price_cents, value_cents
+            "SELECT isin, wkn, name, quantity, current_price_cents, purchase_price_cents, value_cents,
+                    prev_day_price_cents, prev_day_value_cents, profit_loss_purchase_cents, profit_loss_purchase_rel,
+                    profit_loss_prev_day_cents, profit_loss_prev_day_rel, custody_type
              FROM holdings h WHERE account_id = ?1
                AND EXISTS (SELECT 1 FROM accounts a WHERE a.id = h.account_id AND a.deleted_ms IS NULL)
              ORDER BY value_cents DESC, name",
@@ -390,15 +409,33 @@ impl Vault {
                 current_price_cents: r.get(4)?,
                 purchase_price_cents: r.get(5)?,
                 value_cents: r.get(6)?,
+                prev_day_price_cents: r.get(7)?,
+                prev_day_value_cents: r.get(8)?,
+                profit_loss_purchase_cents: r.get(9)?,
+                profit_loss_purchase_rel: r.get(10)?,
+                profit_loss_prev_day_cents: r.get(11)?,
+                profit_loss_prev_day_rel: r.get(12)?,
+                custody_type: r.get(13)?,
             })
         })?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+
+    /// Securities transactions of a depot (#314), newest first.
+    pub fn list_security_transactions(
+        &self,
+        account_id: i64,
+    ) -> Result<Vec<SecurityTransaction>, CoreError> {
+        let db = self.db()?;
+        crate::security_transactions::list(&db, account_id)
     }
 
     // ---------------------------------------------------------------- accounts
 
     pub fn list_accounts(&self) -> Result<Vec<Account>, CoreError> {
         let db = self.db()?;
+        // Sachwerte (#87): a stored value from an earlier day is recomputed first
+        crate::assets::refresh_balances_if_stale(&db)?;
         let mut stmt = db.prepare(&format!(
             "SELECT a.id, a.connection_id, c.connector, a.group_id, a.name, a.bank_name, a.owner, a.iban, a.account_number,
                     a.currency, a.kind, a.balance_cents, a.balance_date, a.sf_symbol, a.sort_order,
@@ -599,6 +636,13 @@ impl Vault {
                 per_day.insert(d, s);
             }
         }
+        // Sachwerte (#87): no bookings, their value moves with prices – the walk
+        // back keeps today's value, the daily valuation replaces it per day
+        let valuation = if ids.is_empty() {
+            None
+        } else {
+            crate::assets::value_series(&*self.db()?, &ids, start, today)?
+        };
         let mut out = Vec::with_capacity(days as usize);
         let mut day = today;
         while day >= start {
@@ -611,6 +655,12 @@ impl Vault {
             day -= chrono::Duration::days(1);
         }
         out.reverse();
+        if let Some(values) = valuation {
+            let now = values.last().copied().unwrap_or(0);
+            for (p, v) in out.iter_mut().zip(values) {
+                p.balance_cents += v - now;
+            }
+        }
         Ok(out)
     }
 

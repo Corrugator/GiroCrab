@@ -39,8 +39,9 @@ struct CommandPaletteView: View {
         })
         out.append(Item(title: String(localized: "Wiederkehrende Buchungen"), subtitle: action, symbol: "repeat") { model.showRecurringSheet = true })
         out.append(Item(title: String(localized: "Zeitraum: Seit letztem Gehalt"), subtitle: String(localized: "Ansicht"), symbol: "banknote") { model.interactivePeriod = .sinceSalary })
-        out.append(Item(title: String(localized: "Zeitraum: Letzte 12 Monate"), subtitle: String(localized: "Ansicht"), symbol: "calendar") { model.interactivePeriod = .last12Months })
-        out.append(Item(title: String(localized: "Zeitraum: Letztes Jahr"), subtitle: String(localized: "Ansicht"), symbol: "calendar") { model.interactivePeriod = .lastYear })
+        out.append(Item(title: String(localized: "Zeitraum: 12 Monate"), subtitle: String(localized: "Ansicht"), symbol: "calendar") { model.interactivePeriod = .months12 })
+        let previousYear = Period.previousYear()
+        out.append(Item(title: String(localized: "Zeitraum: \(previousYear.title)"), subtitle: String(localized: "Ansicht"), symbol: "calendar") { model.interactivePeriod = previousYear })
         out.append(Item(title: String(localized: "Zeitraum: Benutzerdefiniert …"), subtitle: String(localized: "Ansicht"), symbol: "calendar.badge.clock") {
             // once the palette sheet is gone, so the popover can anchor
             model.afterPaletteDismiss = { model.showCustomPeriod = true }
@@ -56,18 +57,28 @@ struct CommandPaletteView: View {
         #else
         out.append(Item(title: String(localized: "Einstellungen"), subtitle: action, symbol: "gearshape") { model.showSettings = true })
         #endif
-        out.append(Item(title: String(localized: "Übersicht"), subtitle: String(localized: "Konten"), symbol: "square.grid.2x2") { model.interactiveSidebarSelection = .allAccounts })
+        out.append(Item(title: String(localized: "Alle Konten"), subtitle: String(localized: "Konten"), symbol: "square.grid.2x2") { model.interactiveSidebarSelection = .allAccounts })
         out.append(Item(title: String(localized: "Neue Kontogruppe"), subtitle: "\(action) · ⇧⌘N", symbol: "folder.badge.plus") { model.groupDialog = .create() })
         out.append(Item(title: String(localized: "Kontogruppen bearbeiten"), subtitle: action, symbol: "slider.horizontal.3") { model.openGroupManager() })
         out.append(Item(title: String(localized: "Neue Hauptkategorie"), subtitle: action, symbol: "plus.square") {
             model.afterPaletteDismiss = { model.newCategoryRequest = NewCategoryRequest(parent: nil) }
         })
         out.append(Item(title: String(localized: "Neues Darlehen"), subtitle: action, symbol: "car") { model.openLoanEditor(.create) })
+        out.append(Item(title: String(localized: "Neues Sachwerte-Konto"), subtitle: action, symbol: "diamond") { model.createTangibleAccount() })
+        if case .account(let id) = model.sidebarSelection, model.isTangible(id) {
+            out.append(Item(title: String(localized: "Sachwert hinzufügen"), subtitle: action, symbol: "plus") { model.openAssetEditor(accountId: id) })
+        }
         if case .account(let id) = model.sidebarSelection, let loan = model.manualLoan(id) {
             out.append(Item(title: String(localized: "Stand von „\(loan.setup.name)“ neu setzen"), subtitle: action, symbol: "calendar.badge.clock") { model.openLoanEditor(.anchor, accountId: id) })
         }
         for m in AccountSidebarMode.allCases where m != model.accountView {
-            out.append(Item(title: m == .byGroup ? String(localized: "Konten nach Gruppe anzeigen") : String(localized: "Konten nach Kontoart anzeigen"), subtitle: String(localized: "Ansicht"), symbol: m.symbol) { model.accountView = m })
+            out.append(Item(title: m.switchTitle, subtitle: String(localized: "Ansicht"), symbol: m.symbol) { model.accountView = m })
+        }
+        for b in model.bankGroups {
+            out.append(Item(title: b.name, subtitle: String(localized: "Bank · \(accountCountText(b.accounts.count))"), symbol: b.sfSymbol) {
+                model.accountView = .byBank
+                model.interactiveSidebarSelection = .bank(b.id)
+            })
         }
         for g in model.namedUserGroups {
             out.append(Item(title: g.name, subtitle: String(localized: "Gruppe · \(accountCountText(g.accounts.count))"), symbol: g.sfSymbol) {
@@ -103,7 +114,7 @@ struct CommandPaletteView: View {
                 Image(systemName: "command").foregroundStyle(Theme.secondary)
                 TextField("Befehl, Konto, Kategorie oder Händler …", text: $query)
                     .textFieldStyle(.plain)
-                    .font(.title3)
+                    .appFont(.title3)
                     .focused($focused)
                     .onSubmit { run(list) }
                     .onKeyPress(.downArrow) { index = min(index + 1, max(list.count - 1, 0)); return .handled }
@@ -121,7 +132,7 @@ struct CommandPaletteView: View {
                             Image(systemName: item.symbol).frame(width: 20).foregroundStyle(i == index ? Theme.accent : Theme.secondary)
                             Text(item.title).foregroundStyle(Theme.text)
                             Spacer()
-                            Text(item.subtitle).font(.caption).foregroundStyle(Theme.secondary)
+                            Text(item.subtitle).appFont(.caption).foregroundStyle(Theme.secondary)
                         }
                         .padding(.horizontal, 12).padding(.vertical, 7)
                         .background(RoundedRectangle(cornerRadius: 7).fill(i == index ? Theme.selection : Color.clear))
@@ -207,15 +218,15 @@ struct CategorizerSheet: View {
             if model.isMultiSelection {
                 let many = model.selectedBookings
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(many.count) Buchungen kategorisieren").font(.headline)
-                    Text(Money.format(many.reduce(0) { $0 + $1.amountCents })).font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary)
+                    Text("\(many.count) Buchungen kategorisieren").appFont(.headline)
+                    Text(Money.format(many.reduce(0) { $0 + $1.amountCents })).appFont(.caption, monospacedDigit: true).foregroundStyle(Theme.secondary)
                 }
             } else if let b = model.selectedBooking {
                 HStack(spacing: 10) {
                     MerchantSignet(merchant: b.merchant, categorySymbol: b.categorySymbol)
                     VStack(alignment: .leading) {
-                        Text(b.merchant.name).font(.headline)
-                        Text(Money.format(b.amountCents)).font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary)
+                        Text(b.merchant.name).appFont(.headline)
+                        Text(Money.format(b.amountCents)).appFont(.caption, monospacedDigit: true).foregroundStyle(Theme.secondary)
                     }
                     Spacer()
                 }
@@ -230,7 +241,7 @@ struct CategorizerSheet: View {
                         VStack(alignment: .leading, spacing: 6) {
                             if let root = group.root {
                                 Label(root.name, systemImage: root.sfSymbol)
-                                    .font(.caption.weight(.semibold))
+                                    .appFont(.caption, weight: .semibold)
                                     .foregroundStyle(Theme.secondary)
                                     .accessibilityAddTraits(.isHeader)
                             }

@@ -82,6 +82,10 @@ pub(crate) fn store_fetch(
             .map(|b| b.trim().to_string())
             .find(|b| !b.is_empty())
             .unwrap_or_else(|| generic_bank_name.clone());
+        let (blocked_refs, pending_refs) =
+            super::account_selection::prepare(&tx, kind, connection_id, &data)?;
+        let deferred = (!pending_refs.is_empty())
+            .then(|| super::account_selection::deferred(&data, &pending_refs));
         let mut data = data;
         // safety net for every connector: repair UTF-8/Latin-1 mojibake
         for a in &mut data.accounts {
@@ -139,6 +143,9 @@ pub(crate) fn store_fetch(
         )?;
         let mut new_accounts: Vec<String> = Vec::new();
         for acc in &data.accounts {
+            if blocked_refs.contains(&acc.external_ref) {
+                continue;
+            }
             let existing: Option<i64> = tx
                 .query_row(
                     // includes soft-deleted rows
@@ -286,7 +293,9 @@ pub(crate) fn store_fetch(
         let mut revoked_refs = data.revoked_refs.clone();
         // Archived accounts are the user's business: skipped above even when
         // the bank still delivers them, so they must not count as "missing".
-        let delivered = |r: &str| account_ids.contains_key(r) || archived_ids.contains_key(r);
+        let delivered = |r: &str| {
+            account_ids.contains_key(r) || archived_ids.contains_key(r) || blocked_refs.contains(r)
+        };
         if data.accounts_complete && !data.accounts.is_empty() {
             let mut q = tx.prepare(
                 "SELECT external_ref FROM accounts
@@ -429,9 +438,13 @@ pub(crate) fn store_fetch(
             tx.execute("DELETE FROM holdings WHERE account_id = ?1", [acc_id])?;
             for h in list {
                 tx.execute(
-                    "INSERT INTO holdings(account_id, isin, wkn, name, quantity, current_price_cents, purchase_price_cents, value_cents)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                    params![acc_id, h.isin, h.wkn, h.name, h.quantity, h.current_price_cents, h.purchase_price_cents, h.value_cents],
+                    "INSERT INTO holdings(account_id, isin, wkn, name, quantity, current_price_cents, purchase_price_cents, value_cents,
+                            prev_day_price_cents, prev_day_value_cents, profit_loss_purchase_cents, profit_loss_purchase_rel,
+                            profit_loss_prev_day_cents, profit_loss_prev_day_rel, custody_type)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+                    params![acc_id, h.isin, h.wkn, h.name, h.quantity, h.current_price_cents, h.purchase_price_cents, h.value_cents,
+                            h.prev_day_price_cents, h.prev_day_value_cents, h.profit_loss_purchase_cents, h.profit_loss_purchase_rel,
+                            h.profit_loss_prev_day_cents, h.profit_loss_prev_day_rel, h.custody_type],
                 )?;
             }
         }
@@ -563,6 +576,23 @@ pub(crate) fn store_fetch(
                 }
             }
         }
+        // Securities transactions (#314): beside the cash bookings, then matched to them.
+        for st in &data.security_transactions {
+            if let Some(id) = resolve(&st.account_ref) {
+                let mut t = st.transaction.clone();
+                t.external_id = st.external_id.clone();
+                crate::security_transactions::upsert(&tx, id, &t)?;
+                crate::security_transactions::link_by_external_id(
+                    &tx,
+                    id,
+                    &t.external_id,
+                    &st.cash_external_id,
+                )?;
+            }
+        }
+        if !data.security_transactions.is_empty() || !data.transactions.is_empty() {
+            crate::security_transactions::link_cash_bookings(&tx)?;
+        }
         // Drop optimistic transfer bookings once the bank's real booking arrived
         // (same account, amount and recipient IBAN) or after 14 days.
         tx.execute(
@@ -603,7 +633,7 @@ pub(crate) fn store_fetch(
             }
         }
         for d in &data.documents {
-            if archived_ids.contains_key(&d.account_ref) {
+            if archived_ids.contains_key(&d.account_ref) || blocked_refs.contains(&d.account_ref) {
                 continue;
             }
             let by_ref = |tx: &rusqlite::Transaction| -> Option<i64> {
@@ -675,6 +705,13 @@ pub(crate) fn store_fetch(
             [connection_id],
         )?;
         tx.commit()?;
+        if let Some(data) = deferred {
+            vault
+                .pending_account_fetches
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(connection_id, (kind, data));
+        }
         Ok(SyncSummary {
             accounts_updated,
             transactions_imported: imported,
