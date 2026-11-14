@@ -110,7 +110,11 @@ Mapping: `AccountKind::CreditCard`, `external_ref` = `Number`, Saldo = `CurrentB
 - [ ] Bleiben Datum/Händler/Zweck beim Wechsel `Unbilled` → `Billed` gleich? (Sonst Dublette nach
       der Abrechnung.)
 - [ ] Ab welchem Zeitraum ist die SMS-TAN nötig, und wie lange gilt sie?
-- [ ] PDF-Abrechnungen: Endpunkt noch nicht untersucht (Postfach/Kontoauszüge).
+- [x] PDF-Abrechnungen: `services/flow/GetStatementsTransaction` (Liste als InitialCall
+      `GetAccountStatementList`, weitere Seiten per `call/flow/GetStatementsTransaction/GetAccountStatementList`
+      mit `{Account, PageIndex}`), Download nach `services/export/CheckAuthorization` als Formular-POST
+      an `call/flow/GetStatementsTransaction/DownloadStatement` (`options.exportRequest = {Account,
+      StatementDocument}`) – live getestet.
 - [ ] XLSX-Export (`/services/export/ExportAsExcel`) wird nicht gebraucht, die JSON-API reicht.
 - [ ] Mehrere Karten / Zusatzkarten testen.
 

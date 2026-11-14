@@ -411,6 +411,18 @@ pub const BANK_MATRIX: &[MatrixEntry] = &[
         issues: &[],
     },
     MatrixEntry {
+        name: "easybank (ehem. Barclays)",
+        kind: Some(ConnectorKind::Easybank),
+        interface: Interface::WebPortal,
+        capabilities: &[
+            Capability::Transactions,
+            Capability::Balances,
+            Capability::Documents,
+        ],
+        status: Status::Verified,
+        issues: &[],
+    },
+    MatrixEntry {
         name: "Trade Republic",
         kind: Some(ConnectorKind::TradeRepublic),
         interface: Interface::WebPortal,
