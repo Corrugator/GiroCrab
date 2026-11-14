@@ -1602,6 +1602,17 @@
         }
       }
     },
+    "Ab" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From"
+          }
+        }
+      }
+    },
     "Ab Stichtag" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1741,6 +1752,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Stop"
+          }
+        }
+      }
+    },
+    "Abrufen: Konto, Umsätze und Dokumente werden über diesen Zugang importiert. Überspringen: nichts davon, bereits gespeicherte Daten bleiben erhalten." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fetch: the account, its transactions and documents are imported through this login. Skip: none of that; data already stored is kept."
           }
         }
       }
@@ -1987,6 +2009,17 @@
         }
       }
     },
+    "Alle Konten ausklappen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expand All Accounts"
+          }
+        }
+      }
+    },
     "Alle Konten dieses Bankzugangs werden samt Buchungen, Belegen und gespeicherten Zugangsdaten aus dem Tresor gelöscht. Das lässt sich nicht widerrufen." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1994,6 +2027,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "All accounts of this bank login are deleted from the vault, including their transactions, documents and stored credentials. This can’t be undone."
+          }
+        }
+      }
+    },
+    "Alle Konten einklappen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapse All Accounts"
           }
         }
       }
@@ -2027,6 +2071,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Remove All Marks"
+          }
+        }
+      }
+    },
+    "Alle Positionen kopieren" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy All Positions"
           }
         }
       }
@@ -2251,6 +2306,17 @@
         }
       }
     },
+    "Am" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On"
+          }
+        }
+      }
+    },
     "Am %@ (Terminüberweisung)" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2291,6 +2357,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "To"
+          }
+        }
+      }
+    },
+    "An diesem Tag ist kein Bestand vorhanden." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing is held on this day."
           }
         }
       }
@@ -2471,6 +2548,28 @@
         }
       }
     },
+    "Anlagegold (Münzen und Barren) mit 999,9 ‰ Feingehalt." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Investment gold (coins and bars) with 999.9 ‰ fineness."
+          }
+        }
+      }
+    },
+    "Anlagen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Investments"
+          }
+        }
+      }
+    },
     "Anlegen" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2643,6 +2742,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Application ID: %@"
+          }
+        }
+      }
+    },
+    "Anzahl" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quantity"
+          }
+        }
+      }
+    },
+    "Anzahl bearbeiten" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Quantity"
+          }
+        }
+      }
+    },
+    "Anzahl bearbeiten …" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Quantity …"
           }
         }
       }
@@ -3062,6 +3194,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Deselect All"
+          }
+        }
+      }
+    },
+    "Auswahl der Konten …" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choosing accounts …"
+          }
+        }
+      }
+    },
+    "Auswahl speichern" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save selection"
           }
         }
       }
@@ -3627,6 +3781,28 @@
         }
       }
     },
+    "Barren" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bar"
+          }
+        }
+      }
+    },
+    "Barren mit 999,9 ‰ Feingehalt. Andere Feingehalte über „Eigene Angabe“." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bars with 999.9 ‰ fineness. For other fineness values, use “Custom”."
+          }
+        }
+      }
+    },
     "Bearbeiten / Details" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4034,6 +4210,17 @@
         }
       }
     },
+    "Bereits über „%@“ eingebunden" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Already connected via “%@”"
+          }
+        }
+      }
+    },
     "Bernstein" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4063,6 +4250,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Special"
+          }
+        }
+      }
+    },
+    "Bestand an diesem Tag: %@. Verkaufte Sachwerte stehen danach unter „Ehemalige Positionen“; ihr Wert bis zum Verkauf bleibt im Verlauf." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Held on this day: %@. Sold assets then appear under “Former positions”; their value until the sale stays in the history."
           }
         }
       }
@@ -4122,6 +4320,17 @@
         }
       }
     },
+    "Beteiligung" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stake"
+          }
+        }
+      }
+    },
     "Betrag" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4173,6 +4382,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Amounts, IBANs, names, account names, payment references and documents are covered; “Hide Categories” also covers categories, groups and security names. Still check the picture before you share it."
+          }
+        }
+      }
+    },
+    "Bewertung" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valuation"
+          }
+        }
+      }
+    },
+    "Bewertungen bearbeiten" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Evaluations"
+          }
+        }
+      }
+    },
+    "Bewertungen bearbeiten …" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Evaluations …"
           }
         }
       }
@@ -4232,6 +4474,17 @@
         }
       }
     },
+    "Bitte Gewicht und Feingehalt (bis 1000 ‰) angeben." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please enter the weight and fineness (up to 1000 ‰)."
+          }
+        }
+      }
+    },
     "Bitte aktualisieren Sie GiroCrab." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4265,6 +4518,17 @@
         }
       }
     },
+    "Bitte den Kaufpreis angeben." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please enter the purchase price."
+          }
+        }
+      }
+    },
     "Bitte die Banking-PIN eingeben." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4283,6 +4547,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Please enter the outstanding balance on the balance date."
+          }
+        }
+      }
+    },
+    "Bitte eine Münze auswählen." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please choose a coin."
           }
         }
       }
@@ -4353,6 +4628,17 @@
         }
       }
     },
+    "Bitte wählen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please choose"
+          }
+        }
+      }
+    },
     "Blau" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4382,6 +4668,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bonus on card payments, automatically invested in your savings plan."
+          }
+        }
+      }
+    },
+    "Boot" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Boat"
           }
         }
       }
@@ -4679,6 +4976,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Computer"
+          }
+        }
+      }
+    },
+    "Consorsbank: Als Anmeldename die 10-stellige Kontonummer des Verrechnungskontos (mit führenden Nullen) gefolgt von 001 verwenden, z. B. 0001234567001 – nicht den Anmeldenamen der Website. Ein falscher Anmeldename wird als „PIN ungültig“ gemeldet." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consorsbank: use the 10-digit account number of the settlement account (with leading zeros) followed by 001 as the login name, e.g. 0001234567001 – not the website login. A wrong login name is reported as “PIN invalid”."
           }
         }
       }
@@ -5244,6 +5552,28 @@
         }
       }
     },
+    "Der Kaufpreis ist keine gültige Zahl." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The purchase price is not a valid number."
+          }
+        }
+      }
+    },
+    "Der Kaufpreis je Stück ist der erste Wert. Spätere Werte, z. B. aus einem Gutachten, tragen Sie über „Bewertungen bearbeiten …“ im Kontextmenü der Position ein." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The purchase price per piece is the first value. Enter later values, e.g. from an appraisal, via “Edit Evaluations …” in the position’s context menu."
+          }
+        }
+      }
+    },
     "Der Kontostand zu Beginn des Stichtags, z. B. aus dem ältesten vorhandenen Kontoauszug. Umsätze ab dem Stichtag werden addiert, ältere nicht. Ohne Stichtag zählen alle Umsätze." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5251,6 +5581,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The balance at the start of the date, e.g. from the oldest statement you have. Bookings from that date on are added, older ones are not. Without a date, all bookings count."
+          }
+        }
+      }
+    },
+    "Der Sachwert und sein Verlauf werden entfernt." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The asset and its history will be removed."
           }
         }
       }
@@ -5317,6 +5658,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The vault key could not be saved in the keychain (error %d). The vault stays open until you quit – please do not quit GiroCrab, check the keychain (Keychain Access) and try again."
+          }
+        }
+      }
+    },
+    "Der Wert folgt dem täglichen Goldpreis (EUR je Feinunze, Frankfurter API). Abgefragt werden nur Metall und Zeitraum." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The value follows the daily gold price (EUR per troy ounce, Frankfurter API). Only the metal and the date range are requested."
+          }
+        }
+      }
+    },
+    "Der Wert gilt bis zum nächsten eingetragenen Wert. Wird sofort gespeichert." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The value holds until the next value entered. Saved immediately."
           }
         }
       }
@@ -5394,6 +5757,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sanitizing diagnostics …"
+          }
+        }
+      }
+    },
+    "Die Anzahl muss größer als 0 sein." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The quantity must be greater than 0."
           }
         }
       }
@@ -6191,6 +6565,39 @@
         }
       }
     },
+    "Edelmetalle & Schmuck" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Precious metals & jewellery"
+          }
+        }
+      }
+    },
+    "Edelstein" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gemstone"
+          }
+        }
+      }
+    },
+    "Ehemalige Positionen (%lld)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Former positions (%lld)"
+          }
+        }
+      }
+    },
     "Eigene API" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6198,6 +6605,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Own API"
+          }
+        }
+      }
+    },
+    "Eigene Angabe" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom"
+          }
+        }
+      }
+    },
+    "Eigene Angaben (Schmuck o. ä.)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom (jewellery etc.)"
           }
         }
       }
@@ -6422,6 +6851,28 @@
         }
       }
     },
+    "Einheit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unit"
+          }
+        }
+      }
+    },
+    "Einige Konten sind bereits über einen anderen Zugang eingebunden. Wählen Sie, welche über diesen Zugang abgerufen werden sollen. Ohne Auswahl werden sie übersprungen." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some accounts are already connected through another login. Choose which ones to fetch through this login. Without a choice they are skipped."
+          }
+        }
+      }
+    },
     "Einkauf" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6539,6 +6990,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Settings… (⌘,)"
+          }
+        }
+      }
+    },
+    "Eintragen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add"
           }
         }
       }
@@ -7082,6 +7544,17 @@
         }
       }
     },
+    "Fahrzeuge" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vehicles"
+          }
+        }
+      }
+    },
     "Familie" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7166,6 +7639,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Party"
+          }
+        }
+      }
+    },
+    "Feingehalt in ‰" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fineness in ‰"
+          }
+        }
+      }
+    },
+    "Feingold je Stück" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fine gold per piece"
           }
         }
       }
@@ -7445,6 +7940,17 @@
         }
       }
     },
+    "Flugzeug" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aircraft"
+          }
+        }
+      }
+    },
     "Fordert die Bank ein TAN-Medium (Fehler 9210), tragen Sie den Gerätenamen aus der BestSign- oder App-Verwaltung ein, z. B. SO:Gerätename." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7599,6 +8105,17 @@
         }
       }
     },
+    "Fügen Sie z. B. Goldmünzen, Barren oder ein Auto hinzu." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add gold coins, bars or a car, for example."
+          }
+        }
+      }
+    },
     "Für %@ braucht GiroCrab eine kostenlose Enable-Banking-Anwendung." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7617,6 +8134,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Only totals and PDFs are currently available for %lld depots."
+          }
+        }
+      }
+    },
+    "Für Dinge ohne Kurs, z. B. Haus, Auto oder Kunst: Sie tragen den Wert zu Stichtagen selbst ein." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For things without a market price, such as a house, car or art: you enter the value on dates yourself."
           }
         }
       }
@@ -7672,6 +8200,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "GiroCrab can't connect to these banks yet. Their accounts and bookings were imported but won't be updated automatically."
+          }
+        }
+      }
+    },
+    "Für diesen Tag hat die Kurs-API keinen Goldpreis (die Daten reichen etwa bis 2000 zurück). Ihr Wert gilt bis zum ersten verfügbaren Kurs und wird nie überschrieben." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The price API has no gold price for this day (its data goes back to about 2000). Your value applies until the first available price and is never overwritten."
           }
         }
       }
@@ -7874,6 +8413,17 @@
         }
       }
     },
+    "Gesamt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total"
+          }
+        }
+      }
+    },
     "Gesamter Zeitraum" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7969,6 +8519,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Health"
+          }
+        }
+      }
+    },
+    "Gewerbe" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commercial property"
+          }
+        }
+      }
+    },
+    "Gewicht" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weight"
+          }
+        }
+      }
+    },
+    "Gewicht je Stück" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weight per piece"
+          }
+        }
+      }
+    },
+    "Gewicht und Feingehalt, z. B. 585 ‰ für 14 Karat." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weight and fineness, e.g. 585 ‰ for 14 carat."
           }
         }
       }
@@ -8259,6 +8853,50 @@
         }
       }
     },
+    "Gold" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gold"
+          }
+        }
+      }
+    },
+    "Goldpreis (automatisch)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gold price (automatic)"
+          }
+        }
+      }
+    },
+    "Goldpreis je Feinunze" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gold price per troy ounce"
+          }
+        }
+      }
+    },
+    "Goldpreis jetzt abrufen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fetch the gold price now"
+          }
+        }
+      }
+    },
     "Google" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8288,6 +8926,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Case-Sensitive"
+          }
+        }
+      }
+    },
+    "Grundstück" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Land"
           }
         }
       }
@@ -8941,6 +9590,17 @@
         }
       }
     },
+    "Immobilien" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Real estate"
+          }
+        }
+      }
+    },
     "Import abbrechen" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9293,6 +9953,17 @@
         }
       }
     },
+    "Instrument" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instrument"
+          }
+        }
+      }
+    },
     "Interactive Brokers Flex Web Service" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9557,6 +10228,17 @@
         }
       }
     },
+    "Kamera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera"
+          }
+        }
+      }
+    },
     "Karte" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9751,6 +10433,72 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Categorization Rules… (⌥⌘K)"
+          }
+        }
+      }
+    },
+    "Kauf" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Purchase"
+          }
+        }
+      }
+    },
+    "Kauf: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Purchase: %@"
+          }
+        }
+      }
+    },
+    "Kaufdatum" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Purchase date"
+          }
+        }
+      }
+    },
+    "Kaufpreis" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Purchase price"
+          }
+        }
+      }
+    },
+    "Kaufpreis gesamt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total purchase price"
+          }
+        }
+      }
+    },
+    "Kaufpreis je Stück" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Purchase price per piece"
           }
         }
       }
@@ -10052,6 +10800,17 @@
         }
       }
     },
+    "Keine Positionen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Positions"
+          }
+        }
+      }
+    },
     "Keine Regel ausgewählt" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10191,6 +10950,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Login: demo, PIN: 12345, any TAN – no real bank, no network."
+          }
+        }
+      }
+    },
+    "Kette" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Necklace"
           }
         }
       }
@@ -10360,6 +11130,17 @@
         }
       }
     },
+    "Konten auswählen – %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose accounts – %@"
+          }
+        }
+      }
+    },
     "Konten ergänzt" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10521,6 +11302,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Link accounts that aren't yet linked to your Enable Banking application on enablebanking.com."
+          }
+        }
+      }
+    },
+    "Kontenauswahl" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account selection"
           }
         }
       }
@@ -10828,6 +11620,17 @@
         }
       }
     },
+    "Kontonummer (10-stellig) + 001" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account number (10 digits) + 001"
+          }
+        }
+      }
+    },
     "Kontosalden und Depotwerte abrufen …" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10945,6 +11748,72 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Art"
+          }
+        }
+      }
+    },
+    "Kurs am %@ fehlt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Price on %@ is missing"
+          }
+        }
+      }
+    },
+    "Kurs für den %@ fehlt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Price for %@ is missing"
+          }
+        }
+      }
+    },
+    "Kurs vom %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "price of %@"
+          }
+        }
+      }
+    },
+    "Kurse aktualisieren" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh prices"
+          }
+        }
+      }
+    },
+    "Kurse aktualisiert" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prices updated"
+          }
+        }
+      }
+    },
+    "Kurse konnten nicht geladen werden: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prices could not be loaded: %@"
           }
         }
       }
@@ -11088,6 +11957,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lime"
+          }
+        }
+      }
+    },
+    "Linear verlaufen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linear"
           }
         }
       }
@@ -11902,6 +12782,17 @@
         }
       }
     },
+    "Motorrad" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Motorbike"
+          }
+        }
+      }
+    },
     "Musik" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11942,6 +12833,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Waste"
+          }
+        }
+      }
+    },
+    "Münze" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coin"
           }
         }
       }
@@ -12243,6 +13145,17 @@
         }
       }
     },
+    "Neue Anzahl" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New quantity"
+          }
+        }
+      }
+    },
     "Neue Bankzugänge" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12463,6 +13376,17 @@
         }
       }
     },
+    "Neuer Sachwert" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Asset"
+          }
+        }
+      }
+    },
     "Neues Archivkonto „%@“ – der Saldo ist die Summe der Umsätze." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12547,6 +13471,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "New account from the file"
+          }
+        }
+      }
+    },
+    "Neues Sachwerte-Konto" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Tangible Assets Account"
+          }
+        }
+      }
+    },
+    "Neues Sachwerte-Konto …" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Tangible Assets Account…"
           }
         }
       }
@@ -12826,6 +13772,17 @@
         }
       }
     },
+    "Noch keine Konten abgerufen." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No accounts fetched yet."
+          }
+        }
+      }
+    },
     "Noch keine Konten – mit + hinzufügen" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12866,6 +13823,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No payments assigned yet"
+          }
+        }
+      }
+    },
+    "Noch keine Sachwerte" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Assets Yet"
+          }
+        }
+      }
+    },
+    "Noch keine Sachwerte. Fügen Sie z. B. Goldmünzen, Barren oder ein Auto hinzu." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No assets yet. Add gold coins, bars or a car, for example."
           }
         }
       }
@@ -13273,6 +14252,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Uncategorised"
+          }
+        }
+      }
+    },
+    "Ohne Kaufpreis gilt der Goldwert am Kaufdatum." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Without a purchase price, the gold value on the purchase date is used."
           }
         }
       }
@@ -13783,6 +14773,17 @@
         }
       }
     },
+    "Position kopieren" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Position"
+          }
+        }
+      }
+    },
     "Positionen" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13790,6 +14791,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Positions"
+          }
+        }
+      }
+    },
+    "Positionen kommen mit dem nächsten Abruf. Käufe, Verkäufe und Sparpläne stehen als Buchungen im Verrechnungskonto." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Positions arrive with the next sync. Buys, sells and savings plans are bookings in the clearing account."
           }
         }
       }
@@ -14543,6 +15555,116 @@
         }
       }
     },
+    "Sachwert" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asset"
+          }
+        }
+      }
+    },
+    "Sachwert bearbeiten" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Asset"
+          }
+        }
+      }
+    },
+    "Sachwert bearbeiten …" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Asset …"
+          }
+        }
+      }
+    },
+    "Sachwert hinzufügen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add asset"
+          }
+        }
+      }
+    },
+    "Sachwert hinzufügen …" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Asset…"
+          }
+        }
+      }
+    },
+    "Sachwert löschen …" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete Asset …"
+          }
+        }
+      }
+    },
+    "Sachwert löschen?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete asset?"
+          }
+        }
+      }
+    },
+    "Sachwert verkaufen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sell Asset"
+          }
+        }
+      }
+    },
+    "Sachwert verkaufen …" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sell Asset …"
+          }
+        }
+      }
+    },
+    "Sachwerte" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tangible Assets"
+          }
+        }
+      }
+    },
     "Salden und Dokumente abrufen" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14605,6 +15727,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Balance History"
+          }
+        }
+      }
+    },
+    "Sammeln & Sonstiges" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collectibles & other"
+          }
+        }
+      }
+    },
+    "Sammlung" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collection"
           }
         }
       }
@@ -14743,6 +15887,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Choose key file (.pem)…"
+          }
+        }
+      }
+    },
+    "Schmuck" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jewellery"
           }
         }
       }
@@ -15292,6 +16447,17 @@
         }
       }
     },
+    "Später" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Later"
+          }
+        }
+      }
+    },
     "Später einrichten" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -15699,6 +16865,17 @@
         }
       }
     },
+    "Stückelung" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Denomination"
+          }
+        }
+      }
+    },
     "Suchausdruck" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -15941,6 +17118,17 @@
         }
       }
     },
+    "Symbol: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Icon: %@"
+          }
+        }
+      }
+    },
     "Symbole durchsuchen" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -16139,6 +17327,17 @@
         }
       }
     },
+    "Technik" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Electronics"
+          }
+        }
+      }
+    },
     "Teil hinzufügen" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -16146,6 +17345,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Add part"
+          }
+        }
+      }
+    },
+    "Teilverkauf oder Zukauf: die neue Gesamtanzahl ab einem Datum. 0 = alles verkauft. Der Verlauf davor bleibt erhalten. Wird sofort gespeichert." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partial sale or additional purchase: the new total quantity from a date. 0 = all sold. The history before stays. Saved immediately."
           }
         }
       }
@@ -16410,6 +17620,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Change schedule"
+          }
+        }
+      }
+    },
+    "Typ" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type"
+          }
+        }
+      }
+    },
+    "Uhr" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Watch"
           }
         }
       }
@@ -16805,6 +18037,50 @@
         }
       }
     },
+    "Verkaufen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sell"
+          }
+        }
+      }
+    },
+    "Verkaufspreis je Stück" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sale price per piece"
+          }
+        }
+      }
+    },
+    "Verkauft" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sold"
+          }
+        }
+      }
+    },
+    "Verkauft am" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sold on"
+          }
+        }
+      }
+    },
     "Verknüpfung lösen" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -17076,6 +18352,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "About %lld monthly payments left"
+          }
+        }
+      }
+    },
+    "Vorbelegt mit dem Goldwert am Kaufdatum. Ohne eigene Angabe gilt dieser Wert." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prefilled with the gold value on the purchase date. Unless you enter your own price, this value applies."
           }
         }
       }
@@ -17410,6 +18697,17 @@
         }
       }
     },
+    "Wein" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wine"
+          }
+        }
+      }
+    },
     "Weiter" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -17509,6 +18807,83 @@
         }
       }
     },
+    "Wert" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Value"
+          }
+        }
+      }
+    },
+    "Wert bleibt bis zum nächsten" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Value holds until the next one"
+          }
+        }
+      }
+    },
+    "Wert gesamt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total value"
+          }
+        }
+      }
+    },
+    "Wert heute" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Value today"
+          }
+        }
+      }
+    },
+    "Wert je Stück" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Value per piece"
+          }
+        }
+      }
+    },
+    "Wert vom %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "value of %@"
+          }
+        }
+      }
+    },
+    "Wertgegenstand" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valuable"
+          }
+        }
+      }
+    },
     "Wertpapierabrechnungen, Kontoauszüge, Kassenbons – verschlüsselt im Tresor. PDF oder Foto hierher ziehen: GiroCrab ordnet es dem passenden Umsatz zu." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -17516,6 +18891,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Securities statements, account statements, receipts – encrypted in the vault. Drop a PDF or photo here: GiroCrab matches it to the right transaction."
+          }
+        }
+      }
+    },
+    "Wertpapiere" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Securities"
           }
         }
       }
@@ -17703,6 +19089,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Never counted as salary."
+          }
+        }
+      }
+    },
+    "Wird sofort gespeichert." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved immediately."
+          }
+        }
+      }
+    },
+    "Wohnung" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flat"
           }
         }
       }
@@ -18059,6 +19467,28 @@
         }
       }
     },
+    "Zwischen zwei Werten" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Between two values"
+          }
+        }
+      }
+    },
+    "Zwischen zwei Werten verläuft der Wert linear. Wird sofort gespeichert." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Between two values, the value changes linearly. Saved immediately."
+          }
+        }
+      }
+    },
     "^DB\\s+(Fernverkehr|Vertrieb)" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -18066,6 +19496,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "^DB\\s+(Fernverkehr|Vertrieb)"
+          }
+        }
+      }
+    },
+    "ab hier: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "from here: %@"
           }
         }
       }
@@ -18177,6 +19618,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Open enablebanking.com/cp/applications"
+          }
+        }
+      }
+    },
+    "gesamt %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "total %@"
           }
         }
       }
@@ -18357,6 +19809,17 @@
         }
       }
     },
+    "noch kein Kurs" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no price yet"
+          }
+        }
+      }
+    },
     "optional" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -18364,6 +19827,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "optional"
+          }
+        }
+      }
+    },
+    "optional, z. B. 999,9 oder 585" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "optional, e.g. 999.9 or 585"
           }
         }
       }
@@ -18408,6 +19882,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "and %lld more"
+          }
+        }
+      }
+    },
+    "verkauft" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sold"
+          }
+        }
+      }
+    },
+    "verkauft am %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sold on %@"
           }
         }
       }
@@ -18467,6 +19963,17 @@
         }
       }
     },
+    "z. B. 10" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. 10"
+          }
+        }
+      }
+    },
     "z. B. 4,99" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -18474,6 +19981,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "e.g. 4.99"
+          }
+        }
+      }
+    },
+    "z. B. Auto" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. Car"
           }
         }
       }
@@ -18507,6 +20025,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "e.g. GENODEF1KS2"
+          }
+        }
+      }
+    },
+    "z. B. Goldbarren 100 g" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. Gold bar 100 g"
+          }
+        }
+      }
+    },
+    "z. B. Händler, Zertifikat, Aufbewahrung" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. dealer, certificate, storage"
+          }
+        }
+      }
+    },
+    "z. B. Krügerrand" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. Krugerrand"
           }
         }
       }
@@ -18705,6 +20256,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Apply"
+          }
+        }
+      }
+    },
+    "Übernehmen und fortfahren" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apply and continue"
           }
         }
       }
@@ -18958,6 +20520,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Delete “%@”…"
+          }
+        }
+      }
+    },
+    "„%@“ löschen?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete “%@”?"
           }
         }
       }

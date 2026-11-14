@@ -182,8 +182,8 @@ struct BankConnectionsSettings: View {
                 ForEach(model.connections) { c in
                     HStack(spacing: 10) {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(c.connector.tint.opacity(0.12))
-                            .overlay(Text(c.connector.monogram).appFont(.caption, weight: .bold).foregroundStyle(c.connector.tint))
+                            .fill(c.tint.opacity(0.12))
+                            .overlay(Text(c.monogram).appFont(.caption, weight: .bold).foregroundStyle(c.tint))
                             .frame(width: 30, height: 30)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(c.displayName).fontWeight(.medium)
@@ -234,6 +234,7 @@ struct BankConnectionsSettings: View {
             // --demo-settings banks:edit / banks:add (screenshots)
             switch model.demoSettingsSheet {
             case "edit": editing = model.connections.first
+            case "select": editing = model.connections.last
             case "add": showAddBank = true
             case "remove": confirmRemove = model.connections.first
             default: break

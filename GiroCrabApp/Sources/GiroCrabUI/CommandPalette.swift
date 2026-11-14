@@ -57,13 +57,17 @@ struct CommandPaletteView: View {
         #else
         out.append(Item(title: String(localized: "Einstellungen"), subtitle: action, symbol: "gearshape") { model.showSettings = true })
         #endif
-        out.append(Item(title: String(localized: "Übersicht"), subtitle: String(localized: "Konten"), symbol: "square.grid.2x2") { model.interactiveSidebarSelection = .allAccounts })
+        out.append(Item(title: String(localized: "Alle Konten"), subtitle: String(localized: "Konten"), symbol: "square.grid.2x2") { model.interactiveSidebarSelection = .allAccounts })
         out.append(Item(title: String(localized: "Neue Kontogruppe"), subtitle: "\(action) · ⇧⌘N", symbol: "folder.badge.plus") { model.groupDialog = .create() })
         out.append(Item(title: String(localized: "Kontogruppen bearbeiten"), subtitle: action, symbol: "slider.horizontal.3") { model.openGroupManager() })
         out.append(Item(title: String(localized: "Neue Hauptkategorie"), subtitle: action, symbol: "plus.square") {
             model.afterPaletteDismiss = { model.newCategoryRequest = NewCategoryRequest(parent: nil) }
         })
         out.append(Item(title: String(localized: "Neues Darlehen"), subtitle: action, symbol: "car") { model.openLoanEditor(.create) })
+        out.append(Item(title: String(localized: "Neues Sachwerte-Konto"), subtitle: action, symbol: "diamond") { model.createTangibleAccount() })
+        if case .account(let id) = model.sidebarSelection, model.isTangible(id) {
+            out.append(Item(title: String(localized: "Sachwert hinzufügen"), subtitle: action, symbol: "plus") { model.openAssetEditor(accountId: id) })
+        }
         if case .account(let id) = model.sidebarSelection, let loan = model.manualLoan(id) {
             out.append(Item(title: String(localized: "Stand von „\(loan.setup.name)“ neu setzen"), subtitle: action, symbol: "calendar.badge.clock") { model.openLoanEditor(.anchor, accountId: id) })
         }

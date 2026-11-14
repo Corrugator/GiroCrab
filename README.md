@@ -184,7 +184,7 @@ Kurz: `girocrab-core` (Rust, per UniFFI) enthält Tresor, Regeln, Händler-Erken
 | Bank | Schnittstelle | Umsätze | Salden | Depot | Überweisung | Dauerauftrag | PDF/Postfach | Status |
 |---|---|---|---|---|---|---|---|---|
 | 1822direkt | FinTS 3.0 | ✓ | ✓ | ✓ | ✓ | – | ✓ | ✅ Verifiziert |
-| Consorsbank | FinTS 3.0 | ✓ | ✓ | ✓ | – | – | – | 🧪 Test gesucht [#45](https://github.com/GiroCrab/GiroCrab/issues/45) |
+| Consorsbank | FinTS 3.0 | ✓ | ✓ | ✓ | – | – | – | ✅ Verifiziert |
 | FinTS-Bank (BLZ + URL) | FinTS 3.0 | ✓ | ✓ | ✓ | ✓ | – | ✓ | ✅ Verifiziert |
 | ING | FinTS 3.0 | ✓ | ✓ | – | – | – | – | 🧪 Test gesucht [#313](https://github.com/GiroCrab/GiroCrab/issues/313) |
 | Volksbank Kassel Göttingen | FinTS 3.0 | ✓ | ✓ | ✓ | ✓ | – | ✓ | ✅ Verifiziert |
@@ -394,7 +394,7 @@ your bank directly. Optional iCloud sync exchanges an encrypted snapshot via you
 | Bank | Interface | Transactions | Balances | Securities | Transfers | Standing orders | PDF/post box | Status |
 |---|---|---|---|---|---|---|---|---|
 | 1822direkt | FinTS 3.0 | ✓ | ✓ | ✓ | ✓ | – | ✓ | ✅ Verified |
-| Consorsbank | FinTS 3.0 | ✓ | ✓ | ✓ | – | – | – | 🧪 Testing wanted [#45](https://github.com/GiroCrab/GiroCrab/issues/45) |
+| Consorsbank | FinTS 3.0 | ✓ | ✓ | ✓ | – | – | – | ✅ Verified |
 | FinTS bank (bank code + URL) | FinTS 3.0 | ✓ | ✓ | ✓ | ✓ | – | ✓ | ✅ Verified |
 | ING | FinTS 3.0 | ✓ | ✓ | – | – | – | – | 🧪 Testing wanted [#313](https://github.com/GiroCrab/GiroCrab/issues/313) |
 | Volksbank Kassel Göttingen | FinTS 3.0 | ✓ | ✓ | ✓ | ✓ | – | ✓ | ✅ Verified |
@@ -470,6 +470,10 @@ XChaCha20-Poly1305 + Argon2id encrypted vault, key in the Keychain (`ThisDeviceO
 request is made for logos and everything stays 100 % local. **Never attach real bank data or credentials to issues.**
 
 DE: Händler-Logos sind **standardmäßig deaktiviert** (Opt-in in den Einstellungen) – ohne Zustimmung werden keine Logos aus dem Netz geladen, alles bleibt zu 100 % lokal.
+
+Sachwerte (gold): only if gold items exist, GiroCrab fetches the daily `XAU/EUR` price from `api.frankfurter.dev` (at most one request a day; the request contains no personal data, quantities or values). Without gold items, no such request is made.
+
+DE: Nur wenn Gold-Sachwerte existieren, ruft GiroCrab den Tageskurs `XAU/EUR` von `api.frankfurter.dev` ab (höchstens eine Anfrage pro Tag; die Anfrage enthält keine persönlichen Daten, Mengen oder Werte). Ohne Gold-Sachwerte findet keine solche Anfrage statt.
 
 **Security lock for bank connections:** if a version turns out to endanger bank access (e.g. a vulnerability in a
 connector), the publisher can publish a signed `banking-policy.json`; older versions then stop contacting banks until
