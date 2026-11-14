@@ -46,7 +46,17 @@ zu Ihren Banken per **FinTS 3.0 / HBCI** und **PSD2 (Enable Banking)** – ohne 
 
 GiroCrab ist eine freie, quelloffene Banking-App (GPLv3) für macOS und – derzeit als Beta über TestFlight – für iPhone und iPad. Alle Daten liegen verschlüsselt auf deinem Gerät. GiroCrab ist ein junges Community-Projekt: Die Bankenabdeckung wächst noch (siehe Bank-Tabelle), und PSD2-Zugänge laufen über einen eigenen, kostenlosen Enable-Banking-Zugang.
 
-### ✨ Neu in v0.6.3
+### ✨ Neu in v0.7.0
+
+- 🐧 **Linux-Oberfläche (Qt 6/QML, community-gepflegt):** `GiroCrabLinux` nutzt denselben Rust-Kern (#438). Es werden noch keine Linux-Pakete veröffentlicht.
+- ☁️ **iCloud-Drive-Ordner „GiroCrab“ (#437):** Der Sync-Ordner heißt jetzt „GiroCrab“; bisherige Daten werden beim ersten Start einmalig kopiert, der alte Ordner bleibt unverändert. Enthält „GiroCrab“ bereits Dateien, nutzt GiroCrab den bisherigen Ordner weiter und zeigt einen Hinweis in den Einstellungen. Bitte alle Geräte aktualisieren, sonst schreiben ältere Versionen weiter in den alten Ordner (GiroCrab weist darauf hin).
+- 🏦 **Neue Anbindungen:** easybank (Kreditkarte, SMS-TAN, PDF-Abrechnungen, #329) und Consorsbank per FinTS (#399).
+- 📈 **Wertpapiere und Sachwerte:** Depotumsätze werden als Wertpapierumsätze gespeichert (#314), FNZ-Umsätze und Fondspositionen lassen sich importieren, Gold, Immobilien und Fahrzeuge lassen sich als Depot ohne Bankanbindung führen (#87, #345).
+- 🆕 **„Neue Umsätze“ (#352)** und Zähler-Blasen für ungeprüfte Buchungen je Konto; **Budgets** lassen sich bearbeiten, entfernen und ausblenden (#430).
+- 🗂️ **Seitenleiste und Bedienung:** „Alle Konten“ mit Gesamtsaldo (#397), Kontosuche, Gruppierung nach Bank und Drag & Drop (#377, #374), einklappbare Kategorien (#408), überarbeitetes Zeitraum-Menü (#382, #393) und einstellbare Schriftgröße (#343).
+- 🛠️ **Fehlerbericht und Zurücksetzen:** In-App-Fehlerbericht mit automatischer Schwärzung persönlicher Daten (#301) sowie „App zurücksetzen“ (#241).
+
+**Highlights aus v0.6.3:**
 
 - 🏦 **FinTS: Einschritt-Fallback bei Fehler 9010 (#313):** lehnt die Bank die Dialoginitialisierung mit TAN-Prozess 4 ab, versucht GiroCrab es einmalig im Einschritt-Verfahren 999 und merkt sich die Präferenz für die Verbindung.
 - 🧾 **SEPA-Referenzen werden gespeichert:** End-to-End-ID, Mandatsreferenz und Gläubiger-ID landen bankunabhängig am Umsatz (Schema 12) – befüllt von comdirect, FinTS/CAMT und Enable Banking (Mandatsreferenz). Die SEPA-Rohdaten sind in der Buchung aufklappbar (#320). Vor dem Testen eine Sicherungskopie des Tresors anlegen, falls ältere Versionen ihn wieder öffnen sollen.
@@ -251,7 +261,17 @@ recognition, savings-plan view, loan repayment progress and direct connections t
 
 GiroCrab is a free, open-source banking app (GPLv3) for macOS and – currently in beta via TestFlight – for iPhone and iPad. All data stays encrypted on your device. GiroCrab is a young community project: bank coverage is still growing (see the bank table), and PSD2 access works through your own free Enable Banking account.
 
-### ✨ What's new in v0.6.3
+### ✨ What's new in v0.7.0
+
+- 🐧 **Linux front end (Qt 6/QML, community-maintained):** `GiroCrabLinux` uses the same Rust core (#438). No Linux packages are published yet.
+- ☁️ **iCloud Drive folder “GiroCrab” (#437):** the sync folder is now called “GiroCrab”; existing data is copied once on first launch and the old folder is left untouched. If “GiroCrab” already contains files, GiroCrab keeps using the previous folder and shows a notice in Settings. Please update all devices, otherwise older versions keep writing to the old folder (GiroCrab shows a notice).
+- 🏦 **New connections:** easybank (credit card, SMS TAN, PDF statements, #329) and Consorsbank via FinTS (#399).
+- 📈 **Securities and tangible assets:** custody transactions are stored as securities transactions (#314), FNZ transactions and fund positions can be imported, and gold, real estate and vehicles can be tracked as a portfolio without a bank connection (#87, #345).
+- 🆕 **“New transactions” (#352)** and counter bubbles for unreviewed bookings per account; **budgets** can be edited, removed and hidden (#430).
+- 🗂️ **Sidebar and usability:** “All accounts” with total balance (#397), account search, grouping by bank and drag & drop (#377, #374), collapsible categories (#408), reworked period menu (#382, #393) and adjustable text size (#343).
+- 🛠️ **Bug report and reset:** in-app bug report with automatic redaction of personal data (#301) and “Reset app” (#241).
+
+**Highlights from v0.6.3:**
 
 - 🏦 **FinTS: single-step fallback on error 9010 (#313):** if the bank rejects dialog initialisation with TAN process 4, GiroCrab retries once with single-step method 999 and remembers the preference for that connection.
 - 🧾 **SEPA references are stored:** end-to-end ID, mandate reference and creditor ID are kept per booking, independent of the bank (schema 12) – filled by comdirect, FinTS/CAMT and Enable Banking (mandate reference). Raw SEPA data can be expanded in the booking (#320). Make a vault backup first if you may want to open it in an older version again.
