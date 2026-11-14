@@ -497,6 +497,10 @@ impl EasybankConnector {
     }
 }
 
+/// 12 statements per page; 10 pages cover the portal's whole archive.
+const MAX_STATEMENT_PAGES: u32 = 10;
+const MAX_PDF_BYTES: usize = 20 * 1024 * 1024;
+
 #[async_trait]
 impl BankConnector for EasybankConnector {
     async fn begin(&mut self, ctx: &ConnectContext) -> CoreResult<Phase> {
@@ -587,6 +591,19 @@ impl BankConnector for EasybankConnector {
         if !self.logged_in {
             return Err(CoreError::SessionClosed);
         }
+        // "Kontoauszüge abrufen" for one card: statements only, no bookings.
+        if let Some(card) = ctx.settings.get(super::STATEMENTS_ONLY) {
+            let card = card.expose().to_string();
+            let mut known = known_statements(&ctx.state);
+            let documents = self
+                .statements(std::slice::from_ref(&card), &mut known, true)
+                .await?;
+            return Ok(FetchResult {
+                documents,
+                state: Some(self.state(&known)),
+                ..Default::default()
+            });
+        }
         // Opening the transactions flow sets the server-side context the
         // booking calls run in and delivers the card list as an initial call.
         let flow = self
@@ -617,8 +634,164 @@ impl BankConnector for EasybankConnector {
             cards.push(json!({ "account": account, "transactions": transactions }));
         }
         let mut out = snapshot(&json!({ "version": 1, "cards": cards }).to_string())?;
-        out.state = Some(json!({ "cookies": persistent_cookies(&self.cookie_header()) }));
+        let auto: Vec<String> = ctx
+            .settings
+            .get(super::STATEMENTS_AUTO)
+            .map(|v| v.expose().split(',').map(str::to_string).collect())
+            .unwrap_or_default();
+        let mut known = known_statements(&ctx.state);
+        if !auto.is_empty() {
+            // Optional: a failed statement download never fails the sync.
+            if let Ok(docs) = self.statements(&auto, &mut known, false).await {
+                out.documents = docs;
+                out.statements_fetched = auto;
+            }
+        }
+        out.state = Some(self.state(&known));
         Ok(out)
+    }
+}
+
+/// Statement dates already downloaded per card (`card:<n>` → `[YYYY-MM-DD]`).
+fn known_statements(state: &Value) -> std::collections::HashMap<String, Vec<String>> {
+    serde_json::from_value(state["statements"].clone()).unwrap_or_default()
+}
+
+impl EasybankConnector {
+    fn state(&self, known: &std::collections::HashMap<String, Vec<String>>) -> Value {
+        json!({ "cookies": persistent_cookies(&self.cookie_header()), "statements": known })
+    }
+
+    /// Monthly statements (PDF) of the given cards. Opens the statements
+    /// flow (cards + first page), pages through the list and downloads every
+    /// statement not in `known` (all of them when `all`).
+    async fn statements(
+        &mut self,
+        cards: &[String],
+        known: &mut std::collections::HashMap<String, Vec<String>>,
+        all: bool,
+    ) -> CoreResult<Vec<crate::documents::RemoteDocument>> {
+        let flow = self
+            .call("services/flow/GetStatementsTransaction", &json!({}))
+            .await?;
+        let first_page = flow["InitialCallResponses"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|c| text(&c["Config"], "Url").ends_with("GetAccountStatementList"))
+            .map(|c| c["Response"]["Item"].clone());
+        let accounts = initial_account_list(&flow);
+        let mut docs = Vec::new();
+        for account in &accounts {
+            let number = text(account, "Number");
+            let card = format!("card:{number}");
+            if number.is_empty() || !cards.contains(&card) {
+                continue;
+            }
+            let mut page_item = match (&first_page, accounts.len()) {
+                (Some(p), 1) => p.clone(),
+                _ => {
+                    self.call(
+                        "call/flow/GetStatementsTransaction/GetAccountStatementList",
+                        &json!({ "Account": account, "PageIndex": 0 }),
+                    )
+                    .await?
+                }
+            };
+            let have = known.entry(card.clone()).or_default();
+            for page in 1..=MAX_STATEMENT_PAGES {
+                for st in page_item["Statements"]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default()
+                {
+                    let Some(date) = date(&st, "StatementDate") else {
+                        continue;
+                    };
+                    if !all && have.contains(&date) {
+                        continue;
+                    }
+                    let bytes = self.download_statement(account, &st, &date).await?;
+                    docs.push(statement_document(&card, number, &date, bytes));
+                    if !have.contains(&date) {
+                        have.push(date);
+                    }
+                }
+                if page_item["HasMore"].as_bool() != Some(true) {
+                    break;
+                }
+                page_item = self
+                    .call(
+                        "call/flow/GetStatementsTransaction/GetAccountStatementList",
+                        &json!({ "Account": account, "PageIndex": page }),
+                    )
+                    .await?;
+            }
+            have.sort();
+        }
+        Ok(docs)
+    }
+
+    /// The web app posts a classic form (it triggers a browser download);
+    /// the answer is the PDF itself.
+    async fn download_statement(
+        &mut self,
+        account: &Value,
+        statement: &Value,
+        date: &str,
+    ) -> CoreResult<Vec<u8>> {
+        self.post("services/export/CheckAuthorization", &json!({}))
+            .await?;
+        let file_name = format!("Kontoauszug_{date}.pdf");
+        let options = json!({
+            "exportRequest": { "Account": account, "StatementDocument": statement },
+            "isLandscape": false,
+            "fileName": file_name,
+            "uniqueID": chrono::Utc::now().timestamp_millis(),
+        });
+        let client = self.client()?;
+        let resp = client
+            .post(format!(
+                "{BASE}/call/flow/GetStatementsTransaction/DownloadStatement"
+            ))
+            .header("Origin", BASE)
+            .header("Referer", format!("{BASE}/getstatementstransaction/start"))
+            .form(&[
+                ("fileName", file_name.as_str()),
+                ("receivers", ""),
+                ("options", &options.to_string()),
+                ("UniqueKey", self.unique_key.as_str()),
+                ("pcid", ""),
+            ])
+            .send()
+            .await?;
+        let bytes = resp.bytes().await?.to_vec();
+        if !bytes.starts_with(b"%PDF-") || bytes.len() > MAX_PDF_BYTES {
+            return Err(CoreError::Protocol {
+                message: tr("easybank: Der Kontoauszug ist kein PDF.").into(),
+            });
+        }
+        Ok(bytes)
+    }
+}
+
+fn statement_document(
+    card: &str,
+    number: &str,
+    date: &str,
+    bytes: Vec<u8>,
+) -> crate::documents::RemoteDocument {
+    crate::documents::RemoteDocument {
+        account_ref: card.into(),
+        booking_external_id: None,
+        title: crate::i18n::trf("Kontoauszug {0}", &[&date]),
+        doc_type: "kontoauszug".into(),
+        mime_type: "application/pdf".into(),
+        file_name: format!("Kontoauszug_easybank_{date}.pdf"),
+        // Stable across sessions (the portal's DocumentID is opaque and may change).
+        source_url: format!("easybank:statement:{number}:{date}"),
+        bytes,
+        date: date.into(),
     }
 }
 
@@ -749,6 +922,28 @@ mod tests {
         };
         assert_eq!(store(&first), 3);
         assert_eq!(store(&second), 0, "same bookings, new ids → no duplicates");
+    }
+
+    #[test]
+    fn statements_have_stable_source_and_remembered_dates() {
+        let d = statement_document(
+            "card:1234567890",
+            "1234567890",
+            "2026-11-10",
+            b"%PDF-1.4".to_vec(),
+        );
+        assert_eq!(d.source_url, "easybank:statement:1234567890:2026-11-10");
+        assert_eq!(
+            (d.doc_type.as_str(), d.date.as_str()),
+            ("kontoauszug", "2026-11-10")
+        );
+        assert_eq!(d.account_ref, "card:1234567890");
+        let state = json!({"cookies": [], "statements": {"card:1234567890": ["2026-10-10"]}});
+        assert_eq!(
+            known_statements(&state)["card:1234567890"],
+            vec!["2026-10-10".to_string()]
+        );
+        assert!(known_statements(&json!({})).is_empty());
     }
 
     #[test]
