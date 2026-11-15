@@ -418,7 +418,7 @@ enum PrintReportBuilder {
         let bodyClass = options.statementStyle ? "paged statement" : "paged"
         return """
         (function(){
-        var W=\(paper.widthMM), H=\(paper.heightMM), FOOTER=\(jsString(footerLeft)), FOOTERMID=\(jsString(footerMid)), PAGEOF=\(jsString(pageOf));
+        var W=\(paper.widthMM), H=\(paper.heightMM), FOOTER=\(jsString(footerLeft)), FOOTERMID=\(jsString(footerMid)), BODYCLASS=\(jsString(bodyClass)), PAGEOF=\(jsString(pageOf));
         var flow=document.getElementById('flow'); if(!flow) return;
         var st=document.createElement('style');
         st.textContent='@page{size:'+W+'mm '+H+'mm;margin:0}.page{width:'+W+'mm;height:'+(H-1)+'mm}';
@@ -436,7 +436,7 @@ enum PrintReportBuilder {
         var wm=flow.querySelector('img.watermark');
         if(wm){wm.parentNode.removeChild(wm);blocks=blocks.filter(function(b){return b.el!==wm;});}
         flow.parentNode.removeChild(flow);
-        document.body.className=\(jsString(bodyClass));
+        document.body.className=BODYCLASS;
         var pages=[],body;
         function newPage(){var p=document.createElement('div');p.className='page';if(wm)p.appendChild(wm.cloneNode(false));body=document.createElement('div');body.className='page-body';p.appendChild(body);var f=document.createElement('div');f.className='page-footer';p.appendChild(f);document.body.appendChild(p);pages.push(p);}
         function fits(){return body.scrollHeight<=body.clientHeight+1;}
