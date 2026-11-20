@@ -1802,3 +1802,72 @@ fn moved_notes_across_three_devices_are_order_independent_without_duplicates() {
     assert_eq!(note(&a1, "Visa"), "Notiz B\nZeile 2\n\nZeile 1");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn moved_note_over_stamp_zero_preserves_constituents_in_three_way_merge() {
+    let dir = temp_dir("notes-stamp0-moved-constituents");
+    let key = vec![7u8; 32];
+
+    // Order 1: A (stamp-0 empty) merges B (moved with 2 constituents), then C (moved with 1 constituent)
+    let a1 = open(&dir, "a1.db");
+    let b1 = open(&dir, "b1.db");
+    let c1 = open(&dir, "c1.db");
+    seed(&a1);
+    seed(&b1);
+    seed(&c1);
+
+    // Order 2: A (stamp-0 empty) merges C first, then B
+    let a2 = open(&dir, "a2.db");
+    let b2 = open(&dir, "b2.db");
+    let c2 = open(&dir, "c2.db");
+    seed(&a2);
+    seed(&b2);
+    seed(&c2);
+
+    for a in [&a1, &a2] {
+        let db = a.db().unwrap();
+        db.execute(
+            "UPDATE accounts SET note = '', note_ms = 0 WHERE name = 'Giro'",
+            [],
+        )
+        .unwrap();
+    }
+    for b in [&b1, &b2] {
+        let db = b.db().unwrap();
+        let id: i64 = db
+            .query_row("SELECT id FROM accounts WHERE name = 'Giro'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        db.execute(
+            "UPDATE accounts SET note = ?1, note_ms = ?2 WHERE id = ?3",
+            params!["Alpha\nBeta — Details", super::MOVED_NOTE_MS, id],
+        )
+        .unwrap();
+        super::write_moved_parts(
+            &db,
+            id,
+            &["Alpha".to_string(), "Beta — Details".to_string()],
+        )
+        .unwrap();
+    }
+    for c in [&c1, &c2] {
+        let db = c.db().unwrap();
+        db.execute(
+            "UPDATE accounts SET note = ?1, note_ms = ?2 WHERE name = 'Giro'",
+            params!["Beta", super::MOVED_NOTE_MS],
+        )
+        .unwrap();
+    }
+
+    a1.merge_other_vault(b1.file_path(), key.clone()).unwrap();
+    a1.merge_other_vault(c1.file_path(), key.clone()).unwrap();
+
+    a2.merge_other_vault(c2.file_path(), key.clone()).unwrap();
+    a2.merge_other_vault(b2.file_path(), key).unwrap();
+
+    // Because "Beta" is contained in constituent "Beta — Details", both orders must yield the exact same combined note.
+    assert_eq!(note(&a1, "Giro"), "Alpha\nBeta — Details");
+    assert_eq!(note(&a2, "Giro"), "Alpha\nBeta — Details");
+    let _ = std::fs::remove_dir_all(dir);
+}

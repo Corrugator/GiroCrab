@@ -470,7 +470,15 @@ pub(crate) fn merge_note_from(
         (joined, MOVED_NOTE_MS)
     } else {
         let (mut note, mut note_ms) = (mine.clone(), mine_ms);
-        crate::sync_merge::take_newer(&mut note, &mut note_ms, text, ms);
+        crate::sync_merge::take_newer(&mut note, &mut note_ms, text.clone(), ms);
+        if ms == MOVED_NOTE_MS && note_ms == MOVED_NOTE_MS {
+            if let NoteOrigin::Schema(schema, src_id) = origin {
+                let parts = read_moved_parts(conn, schema, src_id, &text);
+                if parts.len() > 1 {
+                    combined_parts = Some(parts);
+                }
+            }
+        }
         (note, note_ms)
     };
     if note_ms != MOVED_NOTE_MS {
