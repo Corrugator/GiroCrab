@@ -62,8 +62,9 @@ extension AppModel {
             let raw = EnableBankingLoginSync.reconcile(here: login.applicationId, synced: login.syncedApplicationId,
                                                        store: stored[login.syncKey])
             // remembered so that saving the kept application again resolves it
-            if raw == .conflict, !forced {
-                enableBankingLoginConflicts.insert(login.connectionId)
+            // a forced one stays until its upload succeeded (`markUploadedEnableBankingLogins`)
+            if raw == .conflict {
+                if !forced { enableBankingLoginConflicts.insert(login.connectionId) }
             } else {
                 enableBankingLoginConflicts.remove(login.connectionId)
             }
@@ -161,6 +162,7 @@ extension AppModel {
         guard !marks.isEmpty, self.vault === vault, let current = try? vault.listEnableBankingLogins() else { return }
         for mark in marks where current.first(where: { $0.connectionId == mark.id })?.applicationId == mark.app {
             markEnableBankingLogin(mark.id, mark.app, vault: vault)
+            enableBankingLoginConflicts.remove(mark.id)
         }
     }
 
