@@ -32,15 +32,17 @@ extension AppModel {
         // the keychain query can block (iCloud Keychain): never on the main thread
         enableBankingLoginTask = Task { [weak self] in
             await previous?.value
-            let (stored, apps) = await Task.detached(priority: .utility) { () -> ([String: String], [String: EnableBankingApp]) in
-                let logins = store.loadLogins()
+            let loaded = await Task.detached(priority: .utility) { () -> ([String: String], [String: EnableBankingApp])? in
+                // a failed read is no empty store: uploading over it could replace another device's choice
+                guard let logins = store.loadLogins() else { return nil }
                 var apps: [String: EnableBankingApp] = [:]
                 for id in Set(logins.values) where !id.isEmpty {
                     if let app = store.loadApp(id: id), app.isComplete { apps[id] = app }
                 }
                 return (logins, apps)
             }.value
-            guard let self, self.vault === vault, self.sharesEnableBankingLogins else { return }
+            guard let (stored, apps) = loaded, !Task.isCancelled,
+                  let self, self.vault === vault, self.sharesEnableBankingLogins else { return }
             await self.applyEnableBankingLogins(mode, stored: stored, apps: apps, vault: vault)
         }
     }
@@ -96,14 +98,19 @@ extension AppModel {
         }
         guard !uploads.isEmpty else { return }
         let store = enableBankingLoginStore
+        let gate = enableBankingUploadGate
         let pending = uploads
         let saved = await Task.detached(priority: .utility) { () -> [(id: Int64, app: String)] in
             var saved: [(id: Int64, app: String)] = []
             for upload in pending {
                 do {
-                    // the key first: a device that sees the assignment must find its key
-                    if let key = upload.key { try store.saveApp(key) }
-                    try store.saveLogin(syncKey: upload.syncKey, applicationID: upload.app)
+                    // locked or reset meanwhile: write nothing more
+                    let written = try gate.run {
+                        // the key first: a device that sees the assignment must find its key
+                        if let key = upload.key { try store.saveApp(key) }
+                        try store.saveLogin(syncKey: upload.syncKey, applicationID: upload.app)
+                    }
+                    guard written else { break }
                     saved.append((upload.id, upload.app))
                 } catch {
                     // no iCloud Keychain here: the login keeps its application anyway. Not
@@ -119,6 +126,12 @@ extension AppModel {
 
     /// The settings of a login were saved without changing its application: if it
     /// is in conflict with another device, the kept application now wins there too.
+    /// The login's application was changed here and on another device: saving
+    /// it again (even unchanged) keeps this one everywhere.
+    func enableBankingLoginHasConflict(_ id: Int64) -> Bool {
+        enableBankingLoginConflicts.contains(id)
+    }
+
     func keepEnableBankingLoginApp(_ id: Int64) {
         guard enableBankingLoginConflicts.contains(id) else { return }
         syncEnableBankingLogins(.force(id))

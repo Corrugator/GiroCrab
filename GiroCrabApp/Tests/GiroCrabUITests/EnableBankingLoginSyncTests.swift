@@ -79,6 +79,16 @@ final class EnableBankingLoginSyncTests: XCTestCase {
         XCTAssertNil(Sync.notice(assigned: [], conflicts: []))
     }
 
+    /// Lock/reset closes the gate: no upload writes after it.
+    func testClosedUploadGateSkipsWrites() {
+        let gate = EnableBankingUploadGate()
+        var writes = 0
+        XCTAssertTrue(gate.run { writes += 1 })
+        gate.close()
+        XCTAssertFalse(gate.run { writes += 1 })
+        XCTAssertEqual(writes, 1)
+    }
+
     /// The demo vault never shares (or takes over) a login's application.
     @MainActor
     func testDemoVaultNeverSharesLogins() async throws {
@@ -87,7 +97,7 @@ final class EnableBankingLoginSyncTests: XCTestCase {
             var saved: [[String: String]] = []
             func loadApp(id: String) -> EnableBankingApp? { nil }
             func saveApp(_ app: EnableBankingApp) throws {}
-            func loadLogins() -> [String: String] { loads += 1; return [:] }
+            func loadLogins() -> [String: String]? { loads += 1; return [:] }
             func saveLogin(syncKey: String, applicationID: String) throws { saved.append([syncKey: applicationID]) }
         }
         let wasOn = VaultKeyManager.shared.syncViaICloudKeychain

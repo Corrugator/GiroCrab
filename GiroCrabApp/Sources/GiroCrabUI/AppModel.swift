@@ -692,7 +692,10 @@ public final class AppModel {
     /// The running sync of the logins' applications; the next one waits for it (#962).
     @ObservationIgnored var enableBankingLoginTask: Task<Void, Never>?
     /// Logins whose application was changed here and on another device (#962).
-    @ObservationIgnored var enableBankingLoginConflicts: Set<Int64> = []
+    /// Observed: the bank login sheet enables "Speichern" for them.
+    var enableBankingLoginConflicts: Set<Int64> = []
+    /// Closed on lock/reset so no running upload writes after it (#962).
+    @ObservationIgnored var enableBankingUploadGate = EnableBankingUploadGate()
     /// The personal vault while demo data is shown (nil if never unlocked).
     private(set) var ownVault: Vault? {
         didSet { if oldValue !== ownVault { reconcileLocalApiServer() } }
@@ -1681,6 +1684,12 @@ public final class AppModel {
     /// Cancels every task, drops the vault and clears what it loaded (shared by `lock()` and the app reset).
     func releaseVaultState() {
         reportPick = nil
+        // before the reset deletes the keychain items: no upload may recreate them (#962)
+        enableBankingLoginTask?.cancel()
+        enableBankingLoginTask = nil
+        enableBankingUploadGate.close()
+        enableBankingUploadGate = EnableBankingUploadGate()
+        enableBankingLoginConflicts = []
         scopeLoadTask?.cancel()
         categoryRefreshTask?.cancel()
         dashboardTask?.cancel()

@@ -12,7 +12,8 @@ protocol EnableBankingLoginStore {
     func loadApp(id: String) -> EnableBankingApp?
     func saveApp(_ app: EnableBankingApp) throws
     /// Login (`sync_key` from the core) → application ID; `""` = back to the default application.
-    func loadLogins() -> [String: String]
+    /// `nil` when the store could not be read (not the same as no entries).
+    func loadLogins() -> [String: String]?
     /// One login's assignment only: never touches what other logins (or devices) wrote.
     func saveLogin(syncKey: String, applicationID: String) throws
 }
@@ -73,7 +74,7 @@ struct KeychainEnableBankingLoginStore: EnableBankingLoginStore {
         try save(JSONEncoder().encode(app), Self.appAccount(app.applicationID))
     }
 
-    func loadLogins() -> [String: String] {
+    func loadLogins() -> [String: String]? {
         var q = query("")
         q.removeValue(forKey: kSecAttrAccount as String)
         q[kSecReturnAttributes as String] = true
@@ -82,7 +83,8 @@ struct KeychainEnableBankingLoginStore: EnableBankingLoginStore {
         var out: CFTypeRef?
         let status = SecItemCopyMatching(q as CFDictionary, &out)
         enableBankingKeyLog.info("keychain load (logins): status \(status, privacy: .public)")
-        guard status == errSecSuccess, let items = out as? [[String: Any]] else { return [:] }
+        if status == errSecItemNotFound { return [:] }
+        guard status == errSecSuccess, let items = out as? [[String: Any]] else { return nil }
         var logins: [String: String] = [:]
         for item in items {
             guard let account = item[kSecAttrAccount as String] as? String, account.hasPrefix(Self.loginPrefix),
@@ -96,6 +98,29 @@ struct KeychainEnableBankingLoginStore: EnableBankingLoginStore {
     func saveLogin(syncKey: String, applicationID: String) throws {
         let id = applicationID.trimmingCharacters(in: .whitespacesAndNewlines)
         try save(Data(id.utf8), Self.loginPrefix + syncKey)
+    }
+}
+
+/// Lets uploads to the store run until the vault is locked or the app reset:
+/// `close()` waits for a running write, and none starts after it, so nothing
+/// recreates an item that the reset deletes next.
+final class EnableBankingUploadGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var closed = false
+
+    /// Runs `write` unless closed; false when it was skipped.
+    func run(_ write: () throws -> Void) rethrows -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !closed else { return false }
+        try write()
+        return true
+    }
+
+    func close() {
+        lock.lock()
+        closed = true
+        lock.unlock()
     }
 }
 
