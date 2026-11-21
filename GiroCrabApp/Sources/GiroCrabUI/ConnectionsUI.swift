@@ -243,7 +243,7 @@ struct ConnectionEditSheet: View {
             }
         }
         Button {
-            save()
+            guard save() else { return }
             dismiss()
             model.reconnect(connection)
         } label: { Label("Neu verbinden …", systemImage: "arrow.triangle.2.circlepath") }
@@ -349,7 +349,7 @@ struct ConnectionEditSheet: View {
                             .buttonStyle(.borderedProminent)
                             .fileImporter(isPresented: $importingFinpension, allowedContentTypes: [.commaSeparatedText, .json, .plainText, .data]) { result in
                                 if case .success(let url) = result {
-                                    save()
+                                    guard save() else { return }
                                     model.importFinpension(connection, url: url)
                                     dismiss()
                                 }
@@ -362,7 +362,7 @@ struct ConnectionEditSheet: View {
                             .appFont(.caption).foregroundStyle(Theme.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                         Button {
-                            save()
+                            guard save() else { return }
                             dismiss()
                             model.webLoginConnection = model.connections.first { $0.id == connection.id } ?? connection
                         } label: { Label("Anmelden & Abrufen", systemImage: "safari") }
@@ -370,7 +370,7 @@ struct ConnectionEditSheet: View {
                         Button { importingStatement = true } label: { Label("CSV- oder PDF-Kontoauszug importieren …", systemImage: "doc.badge.plus") }
                             .fileImporter(isPresented: $importingStatement, allowedContentTypes: [.commaSeparatedText, .plainText, .pdf, .data]) { result in
                                 if case .success(let url) = result {
-                                    save()
+                                    guard save() else { return }
                                     model.importStatement(connection, url: url)
                                     dismiss()
                                 }
@@ -405,7 +405,7 @@ struct ConnectionEditSheet: View {
                 if connection.connector == .schwaebischHall {
                     Section {
                         Button {
-                            save()
+                            guard save() else { return }
                             dismiss()
                             model.webLoginConnection = model.connections.first { $0.id == connection.id } ?? connection
                         } label: { Label("Anmelden & Abrufen", systemImage: "safari") }
@@ -445,7 +445,7 @@ struct ConnectionEditSheet: View {
                             }
                             if postbox {
                                 Button {
-                                    save()
+                                    guard save() else { return }
                                     dismiss()
                                     model.fetchComdirectPostbox(model.connections.first { $0.id == connection.id } ?? connection)
                                 } label: { Label("PostBox jetzt abrufen", systemImage: "tray.and.arrow.down") }
@@ -475,7 +475,7 @@ struct ConnectionEditSheet: View {
                         }
                         if postbox {
                             Button {
-                                save()
+                                guard save() else { return }
                                 dismiss()
                                 model.fetchComdirectPostbox(model.connections.first { $0.id == connection.id } ?? connection)
                             } label: { Label("Online-Archiv jetzt abrufen", systemImage: "tray.and.arrow.down") }
@@ -524,8 +524,7 @@ struct ConnectionEditSheet: View {
                     }
                     if isTR {
                         Button {
-                            guard saveSyncScheduleIfChanged() else { return }
-                            save()
+                            guard save() else { return }
                             dismiss()
                             model.webLoginConnection = model.connections.first { $0.id == connection.id } ?? connection
                         } label: { Label("Im Browser-Fenster anmelden …", systemImage: "safari") }
@@ -731,8 +730,8 @@ struct ConnectionEditSheet: View {
     /// The login's settings and the account selection, saved together; a fetch only starts after
     /// the selection is stored (a switched-off account must not be fetched).
     private func saveAll(thenSync: Bool = false) {
-        guard saveSyncScheduleIfChanged() else { return }
         if connection.connector == .advanzia {
+            guard saveSyncScheduleIfChanged() else { return }
             Task { @MainActor in
                 guard let updated = await advanziaSettings.save(connection: connection, name: name, login: login, model: model) else { return }
                 dismiss()
@@ -740,7 +739,7 @@ struct ConnectionEditSheet: View {
             }
             return
         }
-        save()
+        guard save() else { return }
         let id = connection.id
         let draft = selection
         Task { @MainActor in
@@ -807,7 +806,8 @@ struct ConnectionEditSheet: View {
         model.setConnectionPin(connection.id, value)
     }
 
-    private func save() {
+    private func save() -> Bool {
+        guard saveSyncScheduleIfChanged() else { return false }
         if documentsSupported, documentsFetch != initialDocumentsFetch {
             model.setDocumentsFetch(connection.id, documentsFetch)
             initialDocumentsFetch = documentsFetch
@@ -865,6 +865,7 @@ struct ConnectionEditSheet: View {
         if connection.connector == .amazonVisa { portalUser = l }
         initialPortalUser = portalUser.trimmingCharacters(in: .whitespaces)
         initialStorePortalLogin = storePortalLogin
+        return true
     }
 }
 
