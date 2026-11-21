@@ -61,8 +61,8 @@ extension AppModel {
             if case .open = mode { adopting = true }
             let raw = EnableBankingLoginSync.reconcile(here: login.applicationId, synced: login.syncedApplicationId,
                                                        store: stored[login.syncKey])
-            // remembered so that saving the kept application again resolves it
-            // also when forced: it stays until its upload succeeded (`markUploadedEnableBankingLogins`),
+            // remembered so that saving the kept application again resolves it; also when
+            // forced: it stays until its upload succeeded (`markUploadedEnableBankingLogins`),
             // so a failed upload can be retried by saving again
             if raw == .conflict {
                 enableBankingLoginConflicts.insert(login.connectionId)
@@ -126,14 +126,14 @@ extension AppModel {
         markUploadedEnableBankingLogins(saved, vault: vault)
     }
 
-    /// The settings of a login were saved without changing its application: if it
-    /// is in conflict with another device, the kept application now wins there too.
     /// The login's application was changed here and on another device: saving
     /// it again (even unchanged) keeps this one everywhere.
     func enableBankingLoginHasConflict(_ id: Int64) -> Bool {
         enableBankingLoginConflicts.contains(id)
     }
 
+    /// The settings of a login were saved without changing its application: if it
+    /// is in conflict with another device, the kept application now wins there too.
     func keepEnableBankingLoginApp(_ id: Int64) {
         guard enableBankingLoginConflicts.contains(id) else { return }
         syncEnableBankingLogins(.force(id))
