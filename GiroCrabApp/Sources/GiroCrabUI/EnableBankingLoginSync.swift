@@ -13,13 +13,14 @@ protocol EnableBankingLoginStore {
     func saveApp(_ app: EnableBankingApp) throws
     /// Login (`sync_key` from the core) → application ID; `""` = back to the default application.
     func loadLogins() -> [String: String]
-    func saveLogins(_ logins: [String: String]) throws
+    /// One login's assignment only: never touches what other logins (or devices) wrote.
+    func saveLogin(syncKey: String, applicationID: String) throws
 }
 
 /// The iCloud Keychain: same service as the default application, one item per
-/// application (`app.<id>`) plus one item with the assignments (`logins`).
+/// application (`app.<id>`) and one per login assignment (`login.<sync key>`).
 struct KeychainEnableBankingLoginStore: EnableBankingLoginStore {
-    private let loginsAccount = "logins"
+    private static let loginPrefix = "login."
 
     private func query(_ account: String) -> [String: Any] {
         [
@@ -73,11 +74,28 @@ struct KeychainEnableBankingLoginStore: EnableBankingLoginStore {
     }
 
     func loadLogins() -> [String: String] {
-        load(loginsAccount).flatMap { try? JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
+        var q = query("")
+        q.removeValue(forKey: kSecAttrAccount as String)
+        q[kSecReturnAttributes as String] = true
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitAll
+        var out: CFTypeRef?
+        let status = SecItemCopyMatching(q as CFDictionary, &out)
+        enableBankingKeyLog.info("keychain load (logins): status \(status, privacy: .public)")
+        guard status == errSecSuccess, let items = out as? [[String: Any]] else { return [:] }
+        var logins: [String: String] = [:]
+        for item in items {
+            guard let account = item[kSecAttrAccount as String] as? String, account.hasPrefix(Self.loginPrefix),
+                  let data = item[kSecValueData as String] as? Data,
+                  let id = String(data: data, encoding: .utf8) else { continue }
+            logins[String(account.dropFirst(Self.loginPrefix.count))] = id
+        }
+        return logins
     }
 
-    func saveLogins(_ logins: [String: String]) throws {
-        try save(JSONEncoder().encode(logins), loginsAccount)
+    func saveLogin(syncKey: String, applicationID: String) throws {
+        let id = applicationID.trimmingCharacters(in: .whitespacesAndNewlines)
+        try save(Data(id.utf8), Self.loginPrefix + syncKey)
     }
 }
 

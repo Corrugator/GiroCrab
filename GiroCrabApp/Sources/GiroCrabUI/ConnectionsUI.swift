@@ -836,6 +836,9 @@ struct ConnectionEditSheet: View {
             if id != loadedEBApp.id.trimmingCharacters(in: .whitespacesAndNewlines)
                 || pem != loadedEBApp.pem.trimmingCharacters(in: .whitespacesAndNewlines) {
                 model.setConnectionEnableBankingApp(connection.id, applicationID: id, pem: pem)
+            } else {
+                // saved again unchanged: resolves a conflict with another device (#962)
+                model.keepEnableBankingLoginApp(connection.id)
             }
         }
         if isFinTs {

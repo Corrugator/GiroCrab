@@ -88,7 +88,7 @@ final class EnableBankingLoginSyncTests: XCTestCase {
             func loadApp(id: String) -> EnableBankingApp? { nil }
             func saveApp(_ app: EnableBankingApp) throws {}
             func loadLogins() -> [String: String] { loads += 1; return [:] }
-            func saveLogins(_ logins: [String: String]) throws { saved.append(logins) }
+            func saveLogin(syncKey: String, applicationID: String) throws { saved.append([syncKey: applicationID]) }
         }
         let wasOn = VaultKeyManager.shared.syncViaICloudKeychain
         VaultKeyManager.shared.syncViaICloudKeychain = true

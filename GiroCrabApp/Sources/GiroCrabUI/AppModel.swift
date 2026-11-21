@@ -691,6 +691,8 @@ public final class AppModel {
     var enableBankingLoginNotice: EnableBankingLoginNotice?
     /// The running sync of the logins' applications; the next one waits for it (#962).
     @ObservationIgnored var enableBankingLoginTask: Task<Void, Never>?
+    /// Logins whose application was changed here and on another device (#962).
+    @ObservationIgnored var enableBankingLoginConflicts: Set<Int64> = []
     /// The personal vault while demo data is shown (nil if never unlocked).
     private(set) var ownVault: Vault? {
         didSet { if oldValue !== ownVault { reconcileLocalApiServer() } }

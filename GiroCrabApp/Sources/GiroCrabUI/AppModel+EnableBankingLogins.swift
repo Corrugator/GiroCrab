@@ -48,10 +48,8 @@ extension AppModel {
     private func applyEnableBankingLogins(_ mode: EnableBankingLoginShare, stored: [String: String],
                                           apps: [String: EnableBankingApp], vault: Vault) async {
         guard let logins = try? vault.listEnableBankingLogins() else { return }
-        var shared = stored
-        var uploads: [EnableBankingApp] = []
         // marked as shared only once the store has them (see `markUploadedEnableBankingLogins`)
-        var uploaded: [(id: Int64, app: String)] = []
+        var uploads: [(id: Int64, syncKey: String, app: String, key: EnableBankingApp?)] = []
         var assigned: [(bank: String, applicationID: String)] = []
         var conflicts: [String] = []
         for login in logins {
@@ -59,10 +57,15 @@ extension AppModel {
             if case .force(let id) = mode { forced = id == login.connectionId } else { forced = false }
             var adopting = false
             if case .open = mode { adopting = true }
-            let action = EnableBankingLoginSync.filter(
-                EnableBankingLoginSync.reconcile(here: login.applicationId, synced: login.syncedApplicationId,
-                                                 store: stored[login.syncKey]),
-                here: login.applicationId, forced: forced, adopting: adopting)
+            let raw = EnableBankingLoginSync.reconcile(here: login.applicationId, synced: login.syncedApplicationId,
+                                                       store: stored[login.syncKey])
+            // remembered so that saving the kept application again resolves it
+            if raw == .conflict, !forced {
+                enableBankingLoginConflicts.insert(login.connectionId)
+            } else {
+                enableBankingLoginConflicts.remove(login.connectionId)
+            }
+            let action = EnableBankingLoginSync.filter(raw, here: login.applicationId, forced: forced, adopting: adopting)
             let bank = connections.first { $0.id == login.connectionId }?.displayName ?? ""
             switch action {
             case .none:
@@ -72,14 +75,14 @@ extension AppModel {
             case .markSynced(let app):
                 markEnableBankingLogin(login.connectionId, app, vault: vault)
             case .upload(let app):
+                var key: EnableBankingApp?
                 if !app.isEmpty {
                     let pem = ((try? vault.connectionEnableBankingKey(connectionId: login.connectionId)) ?? nil) ?? ""
                     let full = EnableBankingApp(applicationID: app, pem: pem)
                     guard full.isComplete else { continue }
-                    uploads.append(full)
+                    key = full
                 }
-                shared[login.syncKey] = app
-                uploaded.append((login.connectionId, app))
+                uploads.append((login.connectionId, login.syncKey, app, key))
             case .adopt(let app):
                 guard adoptEnableBankingLogin(login.connectionId, app, apps: apps, vault: vault) else { continue }
                 markEnableBankingLogin(login.connectionId, app, vault: vault)
@@ -91,25 +94,34 @@ extension AppModel {
            let notice = EnableBankingLoginSync.notice(assigned: assigned, conflicts: conflicts) {
             enableBankingLoginNotice = notice
         }
-        guard !uploaded.isEmpty else { return }
+        guard !uploads.isEmpty else { return }
         let store = enableBankingLoginStore
-        let logins = shared
-        let keys = uploads
-        let saved = await Task.detached(priority: .utility) { () -> Bool in
-            do {
-                // the keys first: a device that sees the assignment must find its key
-                for app in keys { try store.saveApp(app) }
-                try store.saveLogins(logins)
-                return true
-            } catch {
-                // no iCloud Keychain here: the logins keep their applications anyway. Not
-                // marked as shared, so the next sync uploads them again instead of taking
-                // over the store's older state.
-                enableBankingKeyLog.info("logins upload failed: \((error as NSError).code, privacy: .public)")
-                return false
+        let pending = uploads
+        let saved = await Task.detached(priority: .utility) { () -> [(id: Int64, app: String)] in
+            var saved: [(id: Int64, app: String)] = []
+            for upload in pending {
+                do {
+                    // the key first: a device that sees the assignment must find its key
+                    if let key = upload.key { try store.saveApp(key) }
+                    try store.saveLogin(syncKey: upload.syncKey, applicationID: upload.app)
+                    saved.append((upload.id, upload.app))
+                } catch {
+                    // no iCloud Keychain here: the login keeps its application anyway. Not
+                    // marked as shared, so the next sync uploads it again instead of taking
+                    // over the store's older state.
+                    enableBankingKeyLog.info("login upload failed: \((error as NSError).code, privacy: .public)")
+                }
             }
+            return saved
         }.value
-        if saved { markUploadedEnableBankingLogins(uploaded, vault: vault) }
+        markUploadedEnableBankingLogins(saved, vault: vault)
+    }
+
+    /// The settings of a login were saved without changing its application: if it
+    /// is in conflict with another device, the kept application now wins there too.
+    func keepEnableBankingLoginApp(_ id: Int64) {
+        guard enableBankingLoginConflicts.contains(id) else { return }
+        syncEnableBankingLogins(.force(id))
     }
 
     /// Gives the login the application another device chose; false when its
@@ -133,7 +145,7 @@ extension AppModel {
     /// logins that still use the uploaded application (changed meanwhile = the
     /// next sync shares the newer one).
     private func markUploadedEnableBankingLogins(_ marks: [(id: Int64, app: String)], vault: Vault) {
-        guard self.vault === vault, let current = try? vault.listEnableBankingLogins() else { return }
+        guard !marks.isEmpty, self.vault === vault, let current = try? vault.listEnableBankingLogins() else { return }
         for mark in marks where current.first(where: { $0.connectionId == mark.id })?.applicationId == mark.app {
             markEnableBankingLogin(mark.id, mark.app, vault: vault)
         }
