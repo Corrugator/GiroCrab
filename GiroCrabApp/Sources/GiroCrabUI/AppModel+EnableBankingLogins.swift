@@ -62,9 +62,10 @@ extension AppModel {
             let raw = EnableBankingLoginSync.reconcile(here: login.applicationId, synced: login.syncedApplicationId,
                                                        store: stored[login.syncKey])
             // remembered so that saving the kept application again resolves it
-            // a forced one stays until its upload succeeded (`markUploadedEnableBankingLogins`)
+            // also when forced: it stays until its upload succeeded (`markUploadedEnableBankingLogins`),
+            // so a failed upload can be retried by saving again
             if raw == .conflict {
-                if !forced { enableBankingLoginConflicts.insert(login.connectionId) }
+                enableBankingLoginConflicts.insert(login.connectionId)
             } else {
                 enableBankingLoginConflicts.remove(login.connectionId)
             }
