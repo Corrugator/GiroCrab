@@ -524,6 +524,7 @@ struct ConnectionEditSheet: View {
                     }
                     if isTR {
                         Button {
+                            guard saveSyncScheduleIfChanged() else { return }
                             save()
                             dismiss()
                             model.webLoginConnection = model.connections.first { $0.id == connection.id } ?? connection
@@ -720,13 +721,17 @@ struct ConnectionEditSheet: View {
             .disabled(connection.connector == .advanzia && (advanziaSettings.busy || !advanziaSettings.loaded))
     }
 
+    private func saveSyncScheduleIfChanged() -> Bool {
+        guard syncSchedule != initialSyncSchedule else { return true }
+        guard model.setSyncSchedule(connection.id, syncSchedule) else { return false }
+        initialSyncSchedule = syncSchedule
+        return true
+    }
+
     /// The login's settings and the account selection, saved together; a fetch only starts after
     /// the selection is stored (a switched-off account must not be fetched).
     private func saveAll(thenSync: Bool = false) {
-        if syncSchedule != initialSyncSchedule {
-            guard model.setSyncSchedule(connection.id, syncSchedule) else { return }
-            initialSyncSchedule = syncSchedule
-        }
+        guard saveSyncScheduleIfChanged() else { return }
         if connection.connector == .advanzia {
             Task { @MainActor in
                 guard let updated = await advanziaSettings.save(connection: connection, name: name, login: login, model: model) else { return }

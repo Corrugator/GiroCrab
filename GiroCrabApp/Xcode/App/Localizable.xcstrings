@@ -17108,13 +17108,13 @@
         }
       }
     },
-    "Ihr Tresor enthält bereits Konten. Sie werden durch den Inhalt der Sicherung ersetzt. Bank-Adressen und gespeicherte PINs dieses Geräts bleiben erhalten. Abrufintervalle pro Bankzugang werden aus der Sicherung übernommen." : {
+    "Ihr Tresor enthält bereits Konten. Sie werden durch den Inhalt der Sicherung ersetzt. Bank-Adressen und gespeicherte PINs dieses Geräts bleiben erhalten. Vorhandene Abrufintervalle pro Bankzugang werden aus der Sicherung übernommen. Fehlt für einen Zugang ein Intervall, gilt der bisherige globale Wert dieses Geräts." : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your vault already contains accounts. They will be replaced by the contents of the backup. This device's bank addresses and stored PINs are kept. Fetch intervals per bank connection are restored from the backup."
+            "value" : "Your vault already contains accounts. They will be replaced by the contents of the backup. This device's bank addresses and stored PINs are kept. Per-connection fetch intervals are restored when present in the backup. Connections without an interval use this device's previous global setting."
           }
         }
       }
