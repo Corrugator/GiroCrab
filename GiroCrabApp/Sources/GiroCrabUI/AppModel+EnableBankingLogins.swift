@@ -45,6 +45,8 @@ extension AppModel {
         guard let logins = try? vault.listEnableBankingLogins() else { return }
         var shared = stored
         var uploads: [EnableBankingApp] = []
+        // marked as shared only once the store has them (see `markUploadedEnableBankingLogins`)
+        var uploaded: [(id: Int64, app: String)] = []
         var assigned: [(bank: String, applicationID: String)] = []
         var conflicts: [String] = []
         for login in logins {
@@ -72,26 +74,31 @@ extension AppModel {
                     uploads.append(full)
                 }
                 shared[login.syncKey] = app
-                markEnableBankingLogin(login.connectionId, app, vault: vault)
+                uploaded.append((login.connectionId, app))
             case .adopt(let app):
                 guard adoptEnableBankingLogin(login.connectionId, app, apps: apps, vault: vault) else { continue }
                 markEnableBankingLogin(login.connectionId, app, vault: vault)
                 assigned.append((bank, app))
             }
         }
-        if shared != stored || !uploads.isEmpty {
+        if !uploaded.isEmpty {
             let store = enableBankingLoginStore
             let logins = shared
             let keys = uploads
-            Task.detached(priority: .utility) {
+            let marks = uploaded
+            Task.detached(priority: .utility) { [weak self] in
                 do {
                     // the keys first: a device that sees the assignment must find its key
                     for app in keys { try store.saveApp(app) }
                     try store.saveLogins(logins)
                 } catch {
-                    // no iCloud Keychain here: the logins keep their applications anyway
+                    // no iCloud Keychain here: the logins keep their applications anyway. Not
+                    // marked as shared, so the next sync uploads them again instead of taking
+                    // over the store's older state.
                     enableBankingKeyLog.info("logins upload failed: \((error as NSError).code, privacy: .public)")
+                    return
                 }
+                await self?.markUploadedEnableBankingLogins(marks, vault: vault)
             }
         }
         if !assigned.isEmpty { reloadSettings() }
@@ -115,6 +122,16 @@ extension AppModel {
         } catch {
             Self.debugLog("enablebanking login adopt failed: \(error)")
             return false
+        }
+    }
+
+    /// After the store took the uploads: remembers them as shared, but only for
+    /// logins that still use the uploaded application (changed meanwhile = the
+    /// next sync shares the newer one).
+    private func markUploadedEnableBankingLogins(_ marks: [(id: Int64, app: String)], vault: Vault) {
+        guard self.vault === vault, let current = try? vault.listEnableBankingLogins() else { return }
+        for mark in marks where current.first(where: { $0.connectionId == mark.id })?.applicationId == mark.app {
+            markEnableBankingLogin(mark.id, mark.app, vault: vault)
         }
     }
 
