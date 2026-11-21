@@ -42,12 +42,18 @@ struct KeychainEnableBankingLoginStore: EnableBankingLoginStore {
         return out as? Data
     }
 
+    /// Update first, add only when there is none: a failed write never leaves the
+    /// item deleted (on every device, it is synchronizable).
     private func save(_ data: Data, _ account: String) throws {
-        SecItemDelete(query(account) as CFDictionary)
-        var q = query(account)
-        q[kSecValueData as String] = data
-        q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        let status = SecItemAdd(q as CFDictionary, nil)
+        let attributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+        ]
+        var status = SecItemUpdate(query(account) as CFDictionary, attributes as CFDictionary)
+        if status == errSecItemNotFound {
+            let q = query(account).merging(attributes) { $1 }
+            status = SecItemAdd(q as CFDictionary, nil)
+        }
         enableBankingKeyLog.info("keychain save (login): status \(status, privacy: .public)")
         guard status == errSecSuccess else {
             throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
