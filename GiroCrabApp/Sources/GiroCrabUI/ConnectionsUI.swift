@@ -155,6 +155,8 @@ struct ConnectionEditSheet: View {
     /// "Dokumente abrufen" is off: nothing that fetches documents runs (PostBox included).
     private var documentsBlocked: Bool { documentsSupported && !documentsFetch }
     @State private var initialDocumentsFetch = true
+    @State private var syncSchedule = 0
+    @State private var initialSyncSchedule = 0
     /// The values as loaded: "Speichern" is only available once something differs.
     @State private var initialValues: [String: String] = [:]
     @State private var initialTanMedium = ""
@@ -487,6 +489,18 @@ struct ConnectionEditSheet: View {
                             .leadingFooter()
                     }
                 }
+                if model.supportsSyncSchedule(connection) {
+                    Section {
+                        Picker("Abrufintervall", selection: $syncSchedule) {
+                            ForEach(AutoSync.scheduleOptions, id: \.self) { hours in
+                                Text(AutoSync.label(hours)).tag(hours)
+                            }
+                            if !AutoSync.scheduleOptions.contains(syncSchedule) {
+                                Text(AutoSync.label(syncSchedule)).tag(syncSchedule)
+                            }
+                        }
+                    } header: { Text("Abruf").appSectionHeader() }
+                }
                 Section {
                     // saved by the sheet's own Speichern, so there is a single place to confirm
                     AccountSelectionList(connection: connection, showsSaveButton: false, draft: selection)
@@ -683,6 +697,7 @@ struct ConnectionEditSheet: View {
         if values != initialValues { return true }
         if isFinTs, tanMedium.trimmingCharacters(in: .whitespaces) != initialTanMedium { return true }
         if documentsSupported, documentsFetch != initialDocumentsFetch { return true }
+        if syncSchedule != initialSyncSchedule { return true }
         // Amex portal login (user name, password, save switch) and Advanzia (password, release method)
         // are not in `values`.
         if savesPortalLogin,
@@ -708,6 +723,10 @@ struct ConnectionEditSheet: View {
     /// The login's settings and the account selection, saved together; a fetch only starts after
     /// the selection is stored (a switched-off account must not be fetched).
     private func saveAll(thenSync: Bool = false) {
+        if syncSchedule != initialSyncSchedule {
+            guard model.setSyncSchedule(connection.id, syncSchedule) else { return }
+            initialSyncSchedule = syncSchedule
+        }
         if connection.connector == .advanzia {
             Task { @MainActor in
                 guard let updated = await advanziaSettings.save(connection: connection, name: name, login: login, model: model) else { return }
@@ -738,6 +757,8 @@ struct ConnectionEditSheet: View {
         documentsSupported = model.documentsFetchSupported(connection.id)
         documentsFetch = model.documentsFetchEnabled(connection.id)
         initialDocumentsFetch = documentsFetch
+        syncSchedule = model.syncSchedule(connection.id)
+        initialSyncSchedule = syncSchedule
         if isFinTs { tanMedium = model.revealSetting(tanMediumKey) }
         if savesPortalLogin {
             let storedUser = model.revealSetting(AppModel.portalLoginKey(connection.id))

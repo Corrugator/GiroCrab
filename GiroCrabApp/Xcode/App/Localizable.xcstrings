@@ -2972,6 +2972,16 @@
         }
       }
     },
+    "Abrufintervall" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fetch Interval"
+          }
+        }
+      }
+    },
     "Abrufweg" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -17098,13 +17108,13 @@
         }
       }
     },
-    "Ihr Tresor enthält bereits Konten. Sie werden durch den Inhalt der Sicherung ersetzt. Bank-Adressen, gespeicherte PINs und das Abrufintervall dieses Geräts bleiben erhalten." : {
+    "Ihr Tresor enthält bereits Konten. Sie werden durch den Inhalt der Sicherung ersetzt. Bank-Adressen und gespeicherte PINs dieses Geräts bleiben erhalten. Abrufintervalle pro Bankzugang werden aus der Sicherung übernommen." : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your vault already contains accounts. They will be replaced by the contents of the backup. This device's bank addresses, stored PINs and fetch interval are kept."
+            "value" : "Your vault already contains accounts. They will be replaced by the contents of the backup. This device's bank addresses and stored PINs are kept. Fetch intervals per bank connection are restored from the backup."
           }
         }
       }
@@ -23630,6 +23640,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nothing matches “%@”."
+          }
+        }
+      }
+    },
+    "Nie" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Never"
           }
         }
       }
