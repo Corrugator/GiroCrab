@@ -34,6 +34,8 @@ extension AppModel {
             // read only now: a key saved here meanwhile is what gets compared
             let here = self.vaultEnableBankingApp()
             self.applyEnableBankingKey(EnableBankingKeySync.reconcile(vault: here, store: stored), here: here, vault: vault)
+            // after the default: taking over a new one pins the logins first (#962)
+            self.syncEnableBankingLogins(.open)
         }
     }
 
@@ -67,6 +69,8 @@ extension AppModel {
         guard Self.enableBankingKeySettings.contains(key), sharesEnableBankingKey,
               let app = vaultEnableBankingApp(), app.isComplete else { return }
         uploadEnableBankingKey(app)
+        // a new default pinned the logins to the old one (#962)
+        syncEnableBankingLogins(.shareOnly)
     }
 
     private func uploadEnableBankingKey(_ app: EnableBankingApp) {
@@ -100,6 +104,7 @@ extension AppModel {
         runCore { changed = try vault.setConnectionEnableBankingApp(connectionId: id, applicationId: applicationID, privateKeyPem: pem) }
         if changed {
             toast = String(localized: "Anwendung für diesen Bankzugang gespeichert. Beim nächsten Abruf ist eine neue Zustimmung nötig.")
+            syncEnableBankingLogins(.force(id))
         }
     }
 }

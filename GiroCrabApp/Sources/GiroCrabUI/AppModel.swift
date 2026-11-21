@@ -685,6 +685,10 @@ public final class AppModel {
     @ObservationIgnored var enableBankingKeyStore: EnableBankingKeyStore = KeychainEnableBankingKeyStore()
     /// Taken over from another device; shown once unless the user turned it off.
     var enableBankingAdoptNotice: EnableBankingAdoptNotice?
+    /// Where the bank logins' own applications are shared between devices (#962).
+    @ObservationIgnored var enableBankingLoginStore: EnableBankingLoginStore = KeychainEnableBankingLoginStore()
+    /// Logins that took over an application from another device; shown once unless turned off.
+    var enableBankingLoginNotice: EnableBankingLoginNotice?
     /// The personal vault while demo data is shown (nil if never unlocked).
     private(set) var ownVault: Vault? {
         didSet { if oldValue !== ownVault { reconcileLocalApiServer() } }
