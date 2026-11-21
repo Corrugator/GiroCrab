@@ -22,11 +22,16 @@ extension AppModel {
     /// Reconciles the logins' applications with the store. Runs after the
     /// default application was reconciled: taking over a new default pins the
     /// logins to the old one first (`pin_default_app`), and that is what gets shared.
+    ///
+    /// One sync at a time, from loading the store to marking what was shared:
+    /// an older snapshot must never be applied over a newer sync's result.
     func syncEnableBankingLogins(_ mode: EnableBankingLoginShare) {
         guard sharesEnableBankingLogins, let vault else { return }
         let store = enableBankingLoginStore
+        let previous = enableBankingLoginTask
         // the keychain query can block (iCloud Keychain): never on the main thread
-        Task { [weak self] in
+        enableBankingLoginTask = Task { [weak self] in
+            await previous?.value
             let (stored, apps) = await Task.detached(priority: .utility) { () -> ([String: String], [String: EnableBankingApp]) in
                 let logins = store.loadLogins()
                 var apps: [String: EnableBankingApp] = [:]
@@ -36,12 +41,12 @@ extension AppModel {
                 return (logins, apps)
             }.value
             guard let self, self.vault === vault, self.sharesEnableBankingLogins else { return }
-            self.applyEnableBankingLogins(mode, stored: stored, apps: apps, vault: vault)
+            await self.applyEnableBankingLogins(mode, stored: stored, apps: apps, vault: vault)
         }
     }
 
     private func applyEnableBankingLogins(_ mode: EnableBankingLoginShare, stored: [String: String],
-                                          apps: [String: EnableBankingApp], vault: Vault) {
+                                          apps: [String: EnableBankingApp], vault: Vault) async {
         guard let logins = try? vault.listEnableBankingLogins() else { return }
         var shared = stored
         var uploads: [EnableBankingApp] = []
@@ -81,31 +86,30 @@ extension AppModel {
                 assigned.append((bank, app))
             }
         }
-        if !uploaded.isEmpty {
-            let store = enableBankingLoginStore
-            let logins = shared
-            let keys = uploads
-            let marks = uploaded
-            Task.detached(priority: .utility) { [weak self] in
-                do {
-                    // the keys first: a device that sees the assignment must find its key
-                    for app in keys { try store.saveApp(app) }
-                    try store.saveLogins(logins)
-                } catch {
-                    // no iCloud Keychain here: the logins keep their applications anyway. Not
-                    // marked as shared, so the next sync uploads them again instead of taking
-                    // over the store's older state.
-                    enableBankingKeyLog.info("logins upload failed: \((error as NSError).code, privacy: .public)")
-                    return
-                }
-                await self?.markUploadedEnableBankingLogins(marks, vault: vault)
-            }
-        }
         if !assigned.isEmpty { reloadSettings() }
         if !AppDefaults.store.bool(forKey: EnableBankingKeySync.noticeSuppressedKey),
            let notice = EnableBankingLoginSync.notice(assigned: assigned, conflicts: conflicts) {
             enableBankingLoginNotice = notice
         }
+        guard !uploaded.isEmpty else { return }
+        let store = enableBankingLoginStore
+        let logins = shared
+        let keys = uploads
+        let saved = await Task.detached(priority: .utility) { () -> Bool in
+            do {
+                // the keys first: a device that sees the assignment must find its key
+                for app in keys { try store.saveApp(app) }
+                try store.saveLogins(logins)
+                return true
+            } catch {
+                // no iCloud Keychain here: the logins keep their applications anyway. Not
+                // marked as shared, so the next sync uploads them again instead of taking
+                // over the store's older state.
+                enableBankingKeyLog.info("logins upload failed: \((error as NSError).code, privacy: .public)")
+                return false
+            }
+        }.value
+        if saved { markUploadedEnableBankingLogins(uploaded, vault: vault) }
     }
 
     /// Gives the login the application another device chose; false when its

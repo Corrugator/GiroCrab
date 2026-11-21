@@ -689,6 +689,8 @@ public final class AppModel {
     @ObservationIgnored var enableBankingLoginStore: EnableBankingLoginStore = KeychainEnableBankingLoginStore()
     /// Logins that took over an application from another device; shown once unless turned off.
     var enableBankingLoginNotice: EnableBankingLoginNotice?
+    /// The running sync of the logins' applications; the next one waits for it (#962).
+    @ObservationIgnored var enableBankingLoginTask: Task<Void, Never>?
     /// The personal vault while demo data is shown (nil if never unlocked).
     private(set) var ownVault: Vault? {
         didSet { if oldValue !== ownVault { reconcileLocalApiServer() } }
