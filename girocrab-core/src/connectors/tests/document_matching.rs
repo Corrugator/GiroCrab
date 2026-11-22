@@ -1518,3 +1518,5 @@ fn comdirect_links_only_the_settled_amount_when_a_pre_tax_amount_also_appears() 
         Some(booking_id_of(&v, "settled"))
     );
 }
+
+mod resort;

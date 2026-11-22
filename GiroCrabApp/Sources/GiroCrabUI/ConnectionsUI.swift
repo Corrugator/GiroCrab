@@ -151,6 +151,8 @@ struct ConnectionEditSheet: View {
     @State private var selection = AccountSelectionDraft()
     /// Document retrieval of this connection (only for banks that deliver documents).
     @State private var documentsSupported = false
+    @State private var confirmResort = false
+    @State private var resorting = false
     @State private var documentsFetch = true
     /// "Dokumente abrufen" is off: nothing that fetches documents runs (Postbox included).
     private var documentsBlocked: Bool { documentsSupported && !documentsFetch }
@@ -518,6 +520,10 @@ struct ConnectionEditSheet: View {
                     if let t = connection.lastSyncUnix {
                         LabeledContent("Letzter Abruf") { Text(Date(timeIntervalSince1970: TimeInterval(t)), style: .relative) }
                     }
+                    if isTR || isComdirect || [.fnz, .quirion].contains(connection.connector) {
+                        Button("Dokumente neu einsortieren …") { confirmResort = true }
+                            .disabled(resorting || model.syncingConnectionID != nil)
+                    }
                     if isTR {
                         Button {
                             save()
@@ -557,6 +563,18 @@ struct ConnectionEditSheet: View {
             Text(connection.connector == .comdirect
                 ? "GiroCrab ruft comdirect danach per FinTS ab. Die Bankleitzahl kommt aus der IBAN Ihrer Konten. Beim ersten Abruf werden PIN und Freigabe in der App erneut abgefragt."
                 : "GiroCrab ruft comdirect danach über die Schnittstelle der Bank ab. Dafür sind Client-ID und Client-Secret nötig.")
+        }
+        .confirmationDialog("Dokumente neu einsortieren?", isPresented: $confirmResort, titleVisibility: .visible) {
+            Button("Neu einsortieren") {
+                resorting = true
+                Task {
+                    await model.resortPortalDocuments(connection.id)
+                    resorting = false
+                }
+            }
+            Button("Abbrechen", role: .cancel) {}
+        } message: {
+            Text("GiroCrab prüft die vorhandenen Belege dieses Bankzugangs erneut. Dabei können sich Dokumenttypen und manuell gewählte Ablagekonten ändern. Bestehende Buchungsverknüpfungen bleiben erhalten. Offene Belege können eine neue Verknüpfung erhalten, auch wenn Sie diese zuvor gelöst haben.")
         }
         .confirmationDialog("Sitzung löschen?", isPresented: Binding(get: { confirmClear != nil }, set: { if !$0 { confirmClear = nil } }),
                             titleVisibility: .visible, presenting: confirmClear) { kind in
