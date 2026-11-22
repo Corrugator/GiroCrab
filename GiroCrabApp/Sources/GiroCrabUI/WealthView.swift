@@ -710,8 +710,9 @@ struct WealthView: View {
     private func compositionCard(_ s: WealthSummary, _ d: Derived) -> some View {
         let (title, allParts) = slices(s, d)
         let parts = classMode && hideUnclassifiedInChart ? allParts.filter { $0.id != Self.unclassifiedKey } : allParts
-        // account names are personal, the names of the account kinds are not
-        let personal = !classMode && scope == .cash && grouping == .account
+        // Only the cash tab "Nach Konto" names single accounts, and account names are personal.
+        // The names of account kinds are not (Cash never has a class view, so `classMode` is no factor).
+        let personal = scope == .cash && grouping == .account
         let depotSlices = parts.filter { $0.cents > 0 }.map {
             DepotSlice(id: $0.id, label: $0.label, cents: $0.cents, count: 1, color: $0.color,
                        unclassified: classMode && $0.id == Self.unclassifiedKey, personal: personal, memberKeys: [$0.id])
