@@ -1975,7 +1975,8 @@ QtObject {
             schedulePoll(connection, c.poll_interval_seconds)
         } else if (step.Finished) {
             const s = step.Finished.summary
-            logSync(connection.id, "Ok", "", s.transactions_imported, syncLogSource(connection.id))
+            // what the bank would not give is no success (#1627)
+            logSync(connection.id, s.warnings.length > 0 ? "Partial" : "Ok", s.warnings.concat(s.hints).join(" / "), s.transactions_imported, syncLogSource(connection.id))
             activeChallenge = null
             syncingConnectionID = null
             activeSession = null
@@ -4083,7 +4084,7 @@ QtObject {
             syncLogVersion++
         } catch (e) { /* the log must never get in the way of a sync */ }
     }
-    readonly property var syncLogOutcomeTitles: ({ Ok: qsTr("Erfolgreich"), Error: qsTr("Fehler"), Cancelled: qsTr("Abgebrochen") })
+    readonly property var syncLogOutcomeTitles: ({ Ok: qsTr("Erfolgreich"), Partial: qsTr("Teilweise"), Error: qsTr("Fehler"), Cancelled: qsTr("Abgebrochen") })
     readonly property var syncLogSourceTitles: ({ Manual: qsTr("Manuell"), Automatic: qsTr("Automatisch"), Statements: qsTr("Kontoauszüge") })
     /// CSV of the rows the log window shows.
     function syncLogCSV(entries) {

@@ -24756,13 +24756,13 @@
         }
       }
     },
-    "Nur Fehler" : {
+    "Nur Fehler und Teilweise" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Errors Only"
+            "value" : "Errors and Partial Only"
           }
         }
       }
@@ -24916,13 +24916,13 @@
         }
       }
     },
-    "Nur fehlgeschlagene Abrufe zeigen" : {
+    "Nur fehlgeschlagene und unvollständige Abrufe zeigen" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show failed fetches only"
+            "value" : "Show failed and incomplete fetches only"
           }
         }
       }
@@ -30316,6 +30316,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Partial sale or additional purchase: the new total quantity from a date. 0 = all sold. The history before stays. Saved immediately."
+          }
+        }
+      }
+    },
+    "Teilweise" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partial"
           }
         }
       }
