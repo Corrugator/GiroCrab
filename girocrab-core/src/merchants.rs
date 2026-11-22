@@ -1393,8 +1393,17 @@ impl MerchantRules {
             return Some(to_info(real));
         }
         // "PAYPAL *HAENDLER 1234567890" on card statements (#243): a shop the
-        // dictionary doesn't know is still named right behind the `*`.
-        behind_processor(counterparty).map(|shop| self.resolve_uncached(&shop, purpose))
+        // dictionary doesn't know is still named right behind the `*`. A purpose that
+        // repeats the counterparty names the processor again (Advanzia, #1659): it
+        // must not win over the shop a second time, so the shop is then resolved alone.
+        behind_processor(counterparty).map(|shop| {
+            let found = self.resolve_uncached(&shop, purpose);
+            if found.kind == K::PaymentService {
+                self.resolve_uncached(&shop, "")
+            } else {
+                found
+            }
+        })
     }
 
     fn resolve_uncached(&self, counterparty: &str, purpose: &str) -> MerchantInfo {
@@ -1951,6 +1960,18 @@ mod tests {
         let shop = MerchantResolver::resolve("PAYPAL *HAENDLER MUSTER 1234567890", "");
         assert_eq!(shop.name, "Haendler Muster");
         assert_ne!(shop.key, "paypal");
+        // the purpose repeats the counterparty (Advanzia card statements, #1659)
+        for purpose in [
+            "PAYPAL *HAENDLER MUSTER 1234567890",
+            "PAYPAL *HAENDLER MUSTER 1234567890 Kartenzahlung",
+        ] {
+            let shop = MerchantResolver::resolve("PAYPAL *HAENDLER MUSTER 1234567890", purpose);
+            assert_eq!(shop.name, "Haendler Muster", "{purpose}");
+        }
+        assert_eq!(
+            MerchantResolver::resolve("PAYPAL *SPOTIFY", "PAYPAL *SPOTIFY").key,
+            "spotify"
+        );
         // no shop named: still PayPal
         assert_eq!(MerchantResolver::resolve("PayPal *", "").key, "paypal");
         assert_eq!(
@@ -2522,6 +2543,15 @@ mod tests {
         assert_eq!(r.resolve(cp, "Ihr Einkauf bei Spotify AB").key, "spotify");
         assert_eq!(
             r.resolve("PAYPAL *HAENDLER MUSTER 1234567890", "").name,
+            "Haendler Muster"
+        );
+        // the purpose repeats the counterparty (#1659)
+        assert_eq!(
+            r.resolve(
+                "PAYPAL *HAENDLER MUSTER 1234567890",
+                "PAYPAL *HAENDLER MUSTER 1234567890"
+            )
+            .name,
             "Haendler Muster"
         );
         // nothing behind it: the copy's own name
