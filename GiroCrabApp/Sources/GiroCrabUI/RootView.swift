@@ -69,6 +69,16 @@ public struct GiroCrabScenes: Scene {
         #endif
 
         #if os(macOS)
+        Window("Regeln", id: RuleEditorWindow.id) {
+            RuleEditorWindow()
+                .environment(model)
+                .appTextSize(textSize.effective)
+                .preferredColorScheme(appearance.colorScheme)
+        }
+        .defaultSize(width: 920, height: 660)
+        .windowResizability(.contentMinSize)
+        .commandsRemoved()
+
         Window("Mitteilungen", id: "announcements") {
             AnnouncementsListView()
                 .appTextSize(textSize.effective)
@@ -180,6 +190,10 @@ public struct GiroCrabRootView: View {
                     .transformEnvironment(\.reportRedaction) { $0.formUnion(model.reportRedaction.union(LaunchOptions.current.redaction)) }
                     .onAppear { StartupClock.mark("MainSplitView appear") }
                     #if os(macOS)
+                    .onChange(of: model.ruleEditorRequest, initial: true) {
+                        guard model.showRuleEditor else { return }
+                        openWindow(id: RuleEditorWindow.id)
+                    }
                     // screenshots: --demo-sheet report[:<sheet>] captures the open
                     // view or demo sheet, as "Problem melden" would; once, also
                     // after a lock/unlock brings this view back
@@ -620,10 +634,12 @@ struct MainSplitView: View {
                 .environment(model)
         }
         #endif
+        #if os(iOS)
         .capturableSheet(isPresented: $model.showRuleEditor) {
-            RuleEditorView(initialDraft: model.ruleDraft)
+            RuleEditorView()
                 .environment(model)
         }
+        #endif
         .capturableSheet(isPresented: $model.showCommandPalette, onDismiss: {
             // Follow-up sheet/popover chosen in the palette: opened once the
             // palette is really gone, instead of after a guessed delay.
