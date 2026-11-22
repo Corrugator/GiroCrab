@@ -21,7 +21,7 @@ pub(crate) fn resort(db: &Connection, connection_id: i64, key: &str) -> CoreResu
     let comdirect = is_comdirect(key);
     let source_prefix = match kind {
         ConnectorKind::TradeRepublic => "https://".to_owned(),
-        ConnectorKind::Fnz | ConnectorKind::Quirion => format!("{key}:{connection_id}:"),
+        ConnectorKind::Fnz | ConnectorKind::Quirion => format!("{key}:"),
         _ if comdirect => "comdirect:postbox:".to_owned(),
         _ => return Ok((0, 0)),
     };
