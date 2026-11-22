@@ -188,7 +188,7 @@ pub fn descriptor(kind: ConnectorKind) -> BankDescriptor {
             login_label: tr("E-Mail-Adresse").into(),
             secret_label: tr("Passwort").into(),
             required_settings: vec![],
-            note: tr("Go & Grow (ehemals Bondora): Saldo und Umsätze. Die Schnittstelle liefert nur die letzten zehn Buchungen; ältere lassen sich nur per Import übernehmen. Darum mindestens alle zehn Tage abrufen. Inoffiziell: nutzt die Schnittstelle der Web-App, Änderungen sind möglich.").into(),
+            note: tr("Go & Grow (ehemals Bondora): Saldo und Umsätze. Die Schnittstelle liefert nur die letzten zehn Buchungen (Zinsen, Ein- und Auszahlungen); ältere lassen sich nur per Import übernehmen. Darum abrufen, bevor mehr als zehn neue Buchungen anfallen – bei täglichen Zinsen ohne weitere Buchungen also spätestens alle zehn Tage. Inoffiziell: nutzt die Schnittstelle der Web-App, Änderungen sind möglich.").into(),
         },
         ConnectorKind::Bhw => BankDescriptor {
             kind,

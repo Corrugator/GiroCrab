@@ -17,9 +17,10 @@ dieselbe JSON-Schnittstelle (`https://api.prd.goandgrow.eu/investor/api/v2`).
 * **Login:** E-Mail-Adresse des Go-&-Grow-Kontos, **Passwort:** Go-&-Grow-Passwort.
 * Ein Konto `goandgrow:<Id>`, Kontoart „Tagesgeld / Sparen“, EUR. Kontonummer ist die
   führende Zahl der `ReferenceNumber`.
-* **Die Schnittstelle liefert nur die letzten zehn Buchungen.** Bei täglichen Zinsen heißt
-  das: mindestens alle zehn Tage abrufen, sonst entsteht eine Lücke. Ältere Buchungen lassen
-  sich nur per Import übernehmen.
+* **Die Schnittstelle liefert nur die letzten zehn Buchungen**, Zinsen wie Ein- und
+  Auszahlungen. Abrufen, bevor mehr als zehn neue Buchungen anfallen, sonst entsteht eine
+  Lücke; bei täglichen Zinsen ohne weitere Buchungen heißt das spätestens alle zehn Tage.
+  Ältere Buchungen lassen sich nur per Import übernehmen.
 
 ## Ablauf
 
@@ -46,7 +47,7 @@ Die Schnittstelle authentifiziert allein über die Cookies, ohne `Authorization`
   Passwort und Cookies erreichen keinen anderen Host; Formulare mit `GET` werden abgelehnt.
 * Nennt eine Weiterleitung einen dieser Hosts mit `http` (die App steht hinter einem Proxy),
   wird sie als `https` aufgerufen; unverschlüsselt geht nichts hinaus.
-* Eine Buchung ohne lesbares Datum oder ohne lesbaren Betrag verwirft den ganzen Abruf.
+* Eine Buchung ohne lesbares Datum oder ohne lesbaren Betrag verwirft den ganzen Abruf, ebenso eine Antwort, die keine Liste ist.
 
 ## Offene Punkte
 

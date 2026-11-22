@@ -3,10 +3,13 @@
 //! (your own data, nothing is stored or sent anywhere but to the provider).
 //!
 //! ```sh
-//! read -s SAVINGS_PASSWORD; export SAVINGS_PASSWORD
-//! CONNECTOR=monefit|goandgrow SAVINGS_LOGIN=<e-mail> [SINCE=2026-01-01] \
+//! read -s SAVINGS_PASSWORD
+//! export SAVINGS_PASSWORD
+//! CONNECTOR=monefit SAVINGS_LOGIN='erika@example.org' SINCE=2026-01-01 \
 //!   cargo run -q -p girocrab-core --example savings_web
 //! ```
+//!
+//! `CONNECTOR=goandgrow` tests Go & Grow; without `SINCE` the last 30 days are fetched.
 use girocrab_core::connectors::goandgrow::GoAndGrowConnector;
 use girocrab_core::connectors::monefit::MonefitConnector;
 use girocrab_core::connectors::{BankConnector, ConnectContext, Phase};

@@ -369,7 +369,10 @@ impl BankConnector for GoAndGrowConnector {
         let since = ctx.since_for(&account.external_ref).to_string();
         let mut ids = ContentIds::default();
         let mut out = FetchResult::default();
-        for t in statements.as_array().map(Vec::as_slice).unwrap_or_default() {
+        let Some(statements) = statements.as_array() else {
+            return Err(unexpected(200));
+        };
+        for t in statements {
             let Some(mut b) = parse_statement(t, &account.external_ref) else {
                 return Err(CoreError::invalid(tr(
                     "Go & Grow: Unvollständige Buchung in der Antwort. Es wurden keine Daten übernommen.",

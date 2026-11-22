@@ -1206,8 +1206,8 @@ fn english(de: &str) -> Option<&'static str> {
         "Go & Grow: Unvollständige Buchung in der Antwort. Es wurden keine Daten übernommen." => {
             "Go & Grow: Incomplete booking in the response. No data was taken over."
         }
-        "Go & Grow (ehemals Bondora): Saldo und Umsätze. Die Schnittstelle liefert nur die letzten zehn Buchungen; ältere lassen sich nur per Import übernehmen. Darum mindestens alle zehn Tage abrufen. Inoffiziell: nutzt die Schnittstelle der Web-App, Änderungen sind möglich." => {
-            "Go & Grow (formerly Bondora): balance and bookings. The interface delivers only the latest ten bookings; older ones can only be added by an import. Sync at least every ten days for that reason. Unofficial: uses the web app's interface, changes are possible."
+        "Go & Grow (ehemals Bondora): Saldo und Umsätze. Die Schnittstelle liefert nur die letzten zehn Buchungen (Zinsen, Ein- und Auszahlungen); ältere lassen sich nur per Import übernehmen. Darum abrufen, bevor mehr als zehn neue Buchungen anfallen – bei täglichen Zinsen ohne weitere Buchungen also spätestens alle zehn Tage. Inoffiziell: nutzt die Schnittstelle der Web-App, Änderungen sind möglich." => {
+            "Go & Grow (formerly Bondora): balance and bookings. The interface delivers only the latest ten bookings (interest, deposits and withdrawals); older ones can only be added by an import. Sync before more than ten new bookings accumulate – with daily interest and no other bookings, at least every ten days. Unofficial: uses the web app's interface, changes are possible."
         }
         "Web-App (Direkt-Login)" => "Web app (direct login)",
         // ------------------------------------------------------------ connectors/kontist.rs

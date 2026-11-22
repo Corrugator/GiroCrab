@@ -54,14 +54,22 @@ fn result(v: &Value) -> &Value {
     &v["data"]["result"]
 }
 
-/// A decimal string or number of the API ("4.79000000").
+/// A required amount: a decimal string or number of the API ("4.79000000");
+/// `None` when it is missing, blank or not a number.
 fn amount(v: &Value) -> Option<Decimal> {
     match v {
         Value::String(s) if !s.trim().is_empty() => loose_decimal(s),
         Value::Number(n) => loose_decimal(&n.to_string()),
-        Value::Null => Some(Decimal::ZERO),
-        Value::String(_) => Some(Decimal::ZERO),
         _ => None,
+    }
+}
+
+/// The optional fee: missing or blank is zero, anything else must be a number.
+fn fee(v: &Value) -> Option<Decimal> {
+    match v {
+        Value::Null => Some(Decimal::ZERO),
+        Value::String(s) if s.trim().is_empty() => Some(Decimal::ZERO),
+        other => amount(other),
     }
 }
 
@@ -86,16 +94,15 @@ fn parse_booking(t: &Value) -> Option<RemoteTransaction> {
         .filter(|d| crate::dates::parse_iso(d).is_some())?;
     let txn_type = t["txnType"].as_str().unwrap_or_default();
     let sum = amount(&t["sum"])?;
-    let fee = amount(&t["fee"]).unwrap_or(Decimal::ZERO);
+    let fee = fee(&t["fee"])?;
     let (sign, booking_text) = classify(txn_type);
     let amount_cents = cents_rounded(Decimal::from(sign) * sum - fee)?;
     let description = t["description"].as_str().map(str::trim).unwrap_or_default();
     Some(RemoteTransaction {
         account_ref: ACCOUNT_REF.into(),
-        external_id: format!(
-            "monefit:{time}|{txn_type}|{}",
-            t["sum"].as_str().unwrap_or_default()
-        ),
+        // the normalised amount: "5.07000000", "5.07" and 5.07 give the same id;
+        // `fetch` numbers identical ids (same second, type and amount)
+        external_id: format!("monefit:{time}|{txn_type}|{}", sum.normalize()),
         booking_date: date.into(),
         value_date: date.into(),
         amount_cents,
@@ -206,13 +213,16 @@ impl BankConnector for MonefitConnector {
 
         let since = ctx.since_for(ACCOUNT_REF).to_string();
         let mut out = FetchResult::default();
+        let mut seen = std::collections::HashMap::new();
         'pages: for page in 1..=MAX_PAGES {
             let v = self
                 .get(&format!("/account/list?page={page}&perPage={PAGE_SIZE}"))
                 .await?;
-            let items = result(&v).as_array().cloned().unwrap_or_default();
+            let Some(items) = result(&v).as_array().cloned() else {
+                return Err(unexpected(200));
+            };
             for t in &items {
-                let Some(b) = parse_booking(t) else {
+                let Some(mut b) = parse_booking(t) else {
                     return Err(CoreError::invalid(tr(
                         "Monefit: Unvollständige Buchung in der Antwort. Es wurden keine Daten übernommen.",
                     )));
@@ -221,6 +231,11 @@ impl BankConnector for MonefitConnector {
                 if b.booking_date.as_str() < since.as_str() {
                     break 'pages;
                 }
+                let n = seen.entry(b.external_id.clone()).or_insert(0u32);
+                if *n > 0 {
+                    b.external_id = format!("{}#{n}", b.external_id);
+                }
+                *n += 1;
                 out.transactions.push(b);
             }
             if items.len() < PAGE_SIZE {
@@ -280,7 +295,7 @@ mod tests {
         assert_eq!(b.purpose, "Earnings received");
         assert_eq!(
             b.external_id,
-            "monefit:2026-11-17 03:12:45|INTEREST|5.07493150"
+            "monefit:2026-11-17 03:12:45|INTEREST|5.0749315"
         );
     }
 
@@ -291,6 +306,42 @@ mod tests {
         let b =
             parse_booking(&entry("2026-11-18 03:12:45", "INTEREST", "5.07", "0", None)).unwrap();
         assert_ne!(a.external_id, b.external_id);
+    }
+
+    #[test]
+    fn booking_id_uses_the_normalised_amount() {
+        let a = parse_booking(&entry(
+            "2026-11-17 03:12:45",
+            "DEPOSIT",
+            "10.00000000",
+            "0",
+            None,
+        ))
+        .unwrap();
+        let mut numeric = entry("2026-11-17 03:12:45", "DEPOSIT", "", "0", None);
+        numeric["sum"] = json!(10);
+        let b = parse_booking(&numeric).unwrap();
+        numeric["sum"] = json!(20);
+        let c = parse_booking(&numeric).unwrap();
+        assert_eq!(a.external_id, "monefit:2026-11-17 03:12:45|DEPOSIT|10");
+        assert_eq!(a.external_id, b.external_id);
+        assert_ne!(b.external_id, c.external_id);
+    }
+
+    #[test]
+    fn missing_or_blank_amounts_are_rejected_but_a_missing_fee_is_zero() {
+        assert!(parse_booking(&entry("2026-10-01 10:00:00", "DEPOSIT", "", "0", None)).is_none());
+        assert!(
+            parse_booking(&json!({ "time": "2026-10-01 10:00:00", "txnType": "DEPOSIT" }))
+                .is_none()
+        );
+        assert!(parse_booking(&entry("2026-10-01 10:00:00", "DEPOSIT", "1", "x", None)).is_none());
+        let b = parse_booking(
+            &json!({ "time": "2026-10-01 10:00:00", "txnType": "DEPOSIT", "sum": "0" }),
+        )
+        .unwrap();
+        assert_eq!(b.amount_cents, 0);
+        assert_eq!(amount(&Value::Null), None);
     }
 
     #[test]
