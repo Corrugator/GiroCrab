@@ -69,6 +69,17 @@ enum Theme {
     static let investSpec = ThemeShade(light: "#1F7A5C", dark: "#5EC79F", lightHighContrast: "#176B4F", darkHighContrast: "#86EFAC")
     static let negativeSpec = ThemeShade(light: "#B91C1C", dark: "#F87171", lightHighContrast: "#991B1B", darkHighContrast: "#FCA5A5")
 
+    /// System surfaces for the flat main columns: they follow Light/Dark and
+    /// the user's accent/accessibility settings instead of a hardcoded white.
+    #if os(macOS)
+    static let systemSurface = Color(nsColor: .controlBackgroundColor)
+    static let systemBackground = Color(nsColor: .windowBackgroundColor)
+    static let systemSeparator = Color(nsColor: .separatorColor)
+    #else
+    static let systemSurface = Color(uiColor: .secondarySystemBackground)
+    static let systemBackground = Color(uiColor: .systemBackground)
+    static let systemSeparator = Color(uiColor: .separator)
+    #endif
     static let border = borderSpec.color
     static let text = textSpec.color
     static let secondary = secondarySpec.color
@@ -140,6 +151,29 @@ struct CardBackground: ViewModifier {
 
 extension View {
     func card(padding: CGFloat = 16, vertical: CGFloat? = nil) -> some View { modifier(CardBackground(padding: padding, vertical: vertical)) }
+}
+
+/// Flat section of the main columns (overview, KPI bar, analyses, stream and
+/// inspector): the same inset as a card, but without the rounded tile, the
+/// hairline stroke or the shadow. Sections are separated by full-width
+/// `Divider()`s and a clear typographic hierarchy instead.
+struct FlatSectionBackground: ViewModifier {
+    let horizontal: CGFloat
+    let vertical: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, horizontal)
+            .padding(.vertical, vertical)
+    }
+}
+
+extension View {
+    func flatSection(horizontal: CGFloat = ViewLayout.sectionInset,
+                     vertical: CGFloat = ViewLayout.sectionPadding) -> some View {
+        modifier(FlatSectionBackground(horizontal: horizontal, vertical: vertical))
+    }
 }
 
 enum Money {

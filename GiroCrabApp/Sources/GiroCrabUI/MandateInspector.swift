@@ -8,7 +8,7 @@ struct MandateInspector: View {
 
     var body: some View {
         if let m = model.mandates.first(where: { $0.id == model.selectedMandateID }) {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(m.debtorName).appFont(.title3, weight: .semibold).sensitive()
                     Text("\(m.scheme.title) · \(m.typeText) · \(m.active ? m.sequenceText : String(localized: "Inaktiv"))")
@@ -16,8 +16,9 @@ struct MandateInspector: View {
                         .help(m.typeHelp)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .card()
-                VStack(alignment: .leading, spacing: 10) {
+                .flatSection()
+                Divider()
+                VStack(alignment: .leading, spacing: 8) {
                     field("Mandatsreferenz", m.reference)
                     field("Unterschrieben am", DateText.medium(m.signedDate), sensitive: false)
                     field("IBAN", m.debtorIban, mono: true)
@@ -28,7 +29,8 @@ struct MandateInspector: View {
                     if !m.note.isEmpty { field("Notiz", m.note) }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .card()
+                .flatSection()
+                Divider()
                 returnsCard(m)
                 bookingsCard
                 HStack {
@@ -48,7 +50,7 @@ struct MandateInspector: View {
                     .appFont(.callout).foregroundStyle(Theme.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .card()
+            .flatSection()
         }
     }
 
@@ -72,7 +74,8 @@ struct MandateInspector: View {
                 .buttonStyle(.bordered)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .card()
+            .flatSection()
+            .overlay(alignment: .bottom) { Divider() }
         }
     }
 
@@ -94,7 +97,8 @@ struct MandateInspector: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .card()
+            .flatSection()
+            .overlay(alignment: .bottom) { Divider() }
         }
     }
 
