@@ -809,7 +809,8 @@ public final class AppModel {
     var quietSyncConnectionID: Int64?
     /// What the last scheduled fetch did, for the menu bar popover (GitHub #546).
     var autoSyncStatus = AutoSyncStatus()
-    private(set) var scheduledBankSyncPaused = false
+    /// Unknown until the locked vault's schedules have been read in this session.
+    private(set) var scheduledBankSyncPaused: Bool?
     var pollTask: Task<Void, Never>?
     var searchTask: Task<Void, Never>?
     var scopeLoadTask: Task<Void, Never>?
@@ -1671,7 +1672,7 @@ public final class AppModel {
 
     /// Cancels every task, drops the vault and clears what it loaded (shared by `lock()` and the app reset).
     func releaseVaultState() {
-        scheduledBankSyncPaused = false
+        scheduledBankSyncPaused = nil
         reportPick = nil
         scopeLoadTask?.cancel()
         categoryRefreshTask?.cancel()

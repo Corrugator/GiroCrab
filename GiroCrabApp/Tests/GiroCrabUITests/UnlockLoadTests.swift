@@ -39,6 +39,7 @@ final class UnlockLoadTests: XCTestCase {
         XCTAssertEqual(model.vaultState, .unlocking)
         XCTAssertTrue(model.bookings.isEmpty)
         await load.value
+        XCTAssertNotNil(model.autoSyncTask)
         model.stopAutoSync()
 
         XCTAssertEqual(model.vaultState, .open)
@@ -73,6 +74,7 @@ final class UnlockLoadTests: XCTestCase {
         await Task.yield()
         model.vaultState = .locked
         await load.value
+        XCTAssertNil(model.autoSyncTask)
         model.stopAutoSync()
         XCTAssertEqual(model.vaultState, .locked)
     }
