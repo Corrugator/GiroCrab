@@ -6865,6 +6865,17 @@
         }
       }
     },
+    "Bausparen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Building savings"
+          }
+        }
+      }
+    },
     "Bausparverträge und Umsätze abrufen …" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -16434,17 +16445,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Unlock the GiroCrab vault"
-          }
-        }
-      }
-    },
-    "Girokonten" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Checking accounts"
           }
         }
       }
@@ -33545,17 +33545,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Payment service"
-          }
-        }
-      }
-    },
-    "Zahlungsdienste" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Payment services"
           }
         }
       }

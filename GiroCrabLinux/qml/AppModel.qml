@@ -606,6 +606,10 @@ QtObject {
                 sidebarSelection = "all"
             if (sidebarSelection.startsWith("bank:") && !bankGroup(sidebarSelection.slice(5)))
                 sidebarSelection = "all"
+            // a section whose last account left (another kind, #1630): no account ids would
+            // filter as "all accounts" while the sidebar still names the section
+            if (sidebarSelection.startsWith("group:") && !groups.some(g => "group:" + g.id === sidebarSelection && g.accounts.length > 0))
+                sidebarSelection = "all"
             rebuildAccountIndex()
             applyAssets(r[3], r[4])
             const queue = afterAccountsQueue
@@ -2827,11 +2831,15 @@ QtObject {
     }
     /// AccountGroupsModel.swift › setAccountKind ("Kontoart ändern …").
     function setAccountKind(id, kind) {
-        if (run(() => { core("set_account_kind", { account_id: id, kind: kind }); return true })) { reloadAccounts(); reloadDashboard() }
+        // the kind decides what "Verfügbar" and its history count (Bausparen does not, #1630) and
+        // moves the account to another section: once the accounts with the new kind are published,
+        // the history and the selection (list and sums of a section) reload
+        if (run(() => { core("set_account_kind", { account_id: id, kind: kind }); return true })) { reloadAccounts(() => { reloadHistory(); reloadSelection(false) }); reloadDashboard() }
     }
     /// AccountKind.importChoices with their labels.
     readonly property var accountKindChoices: [
         { id: "Checking", text: qsTr("Girokonto") }, { id: "Savings", text: qsTr("Tagesgeld / Sparen") }, { id: "TimeDeposit", text: qsTr("Festgeld") },
+        { id: "BuildingSavings", text: qsTr("Bausparen") },
         { id: "CreditCard", text: qsTr("Kreditkarte") }, { id: "PaymentService", text: qsTr("Zahlungsdienst") },
         { id: "Brokerage", text: qsTr("Depot") }, { id: "Cash", text: qsTr("Bargeld") }, { id: "Loan", text: qsTr("Darlehen") }
     ]

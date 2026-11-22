@@ -801,6 +801,7 @@ impl BankConnector for FinTsConnector {
                     AccountKind::Loan => "Darlehen".into(),
                     AccountKind::Savings => "Sparkonto".into(),
                     AccountKind::TimeDeposit => "Festgeld".into(),
+                    AccountKind::BuildingSavings => "Bausparvertrag".into(),
                     AccountKind::CreditCard => "Kreditkarte".into(),
                     AccountKind::Brokerage => "Depot".into(),
                     _ => "Girokonto".into(),

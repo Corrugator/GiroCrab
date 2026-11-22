@@ -726,6 +726,16 @@ fn own_iban_wins_over_account_number_match() {
     assert!(out[1].1.is_none());
 }
 
+/// FinTS Kontoart 70-79 is a Bausparvertrag (#1630), not a savings account.
+#[test]
+fn kind_codes_tell_building_savings_from_savings() {
+    assert_eq!(kind_from_code(10), AccountKind::Savings);
+    assert_eq!(kind_from_code(29), AccountKind::Savings);
+    assert_eq!(kind_from_code(70), AccountKind::BuildingSavings);
+    assert_eq!(kind_from_code(79), AccountKind::BuildingSavings);
+    assert_eq!(kind_from_code(80), AccountKind::Checking);
+}
+
 #[test]
 fn parses_upd_with_allowed_transactions_and_loans() {
     let r = reply(b"HIUPD:5:6:3+0012345601::280:52090000+DE44520900000012345601+KUNDE+1+EUR+Muster+Alex+Girokonto++HKSAL:1+HKCAZ:1+HKKAZ:1'HIUPD:6:6:3+0098765400::280:52090000++KUNDE+40+EUR+Muster+Alex+Baudarlehen++HKSAL:1'");
