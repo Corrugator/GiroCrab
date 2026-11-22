@@ -105,6 +105,9 @@ extension AppModel {
         if changed {
             toast = String(localized: "Anwendung für diesen Bankzugang gespeichert. Beim nächsten Abruf ist eine neue Zustimmung nötig.")
             syncEnableBankingLogins(.force(id))
+        } else {
+            // same application it already signs with: still resolves a conflict with another device (#962)
+            keepEnableBankingLoginApp(id)
         }
     }
 }
