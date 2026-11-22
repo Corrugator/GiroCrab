@@ -77,6 +77,7 @@ struct GeneralSettings: View {
     @AppStorage(PrivacyMode.scopeKey) private var privacyScope = PrivacyMode.defaultScope
     @AppStorage(AppAppearance.defaultsKey) private var appearance: AppAppearance = .system
     @AppStorage(BookingDensity.defaultsKey) private var bookingDensity: BookingDensity = .standard
+    @AppStorage(SidebarDensity.defaultsKey) private var sidebarDensity: SidebarDensity = .defaultValue
 
     /// Core setting `sync.days_back`: how far the first fetch of a new account reaches back.
     private var firstFetchDays: Binding<Int> {
@@ -110,6 +111,11 @@ struct GeneralSettings: View {
                     ForEach(BookingDensity.allCases) { Text($0.title).appFont(.body).tag($0) }
                 }
                 Text("Kompakt öffnet die aktive Buchung mit allen Details. Standard zeigt einen kurzen Verwendungszweck. Großzügig zeigt alle Buchungen ausführlich.")
+                    .appFont(.caption).foregroundStyle(.secondary)
+                Picker("Seitenleiste", selection: $sidebarDensity) {
+                    ForEach(SidebarDensity.allCases) { Text($0.title).appFont(.body).tag($0) }
+                }
+                Text("Großzügig zeigt Kontoname, Inhaber, neue Buchungen und Saldo in einer Zeile. Kompakt braucht weniger Breite und zeigt den Saldo unter dem Namen.")
                     .appFont(.caption).foregroundStyle(.secondary)
                 #if os(macOS)
                 // iOS: the system's Dynamic Type setting (Einstellungen › Anzeige & Helligkeit).
