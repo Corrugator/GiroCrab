@@ -100,9 +100,18 @@ fn parse_booking(t: &Value) -> Option<RemoteTransaction> {
     let description = t["description"].as_str().map(str::trim).unwrap_or_default();
     Some(RemoteTransaction {
         account_ref: ACCOUNT_REF.into(),
-        // the normalised amount: "5.07000000", "5.07" and 5.07 give the same id;
-        // `fetch` numbers identical ids (same second, type and amount)
-        external_id: format!("monefit:{time}|{txn_type}|{}", sum.normalize()),
+        // normalised amounts: "5.07000000", "5.07" and 5.07 give the same id. With the
+        // fee (if any) the id covers everything that makes up the booking, so equal ids
+        // are identical bookings and `fetch` numbering them does not depend on their order
+        external_id: if fee.is_zero() {
+            format!("monefit:{time}|{txn_type}|{}", sum.normalize())
+        } else {
+            format!(
+                "monefit:{time}|{txn_type}|{}|{}",
+                sum.normalize(),
+                fee.normalize()
+            )
+        },
         booking_date: date.into(),
         value_date: date.into(),
         amount_cents,
@@ -326,6 +335,31 @@ mod tests {
         assert_eq!(a.external_id, "monefit:2026-11-17 03:12:45|DEPOSIT|10");
         assert_eq!(a.external_id, b.external_id);
         assert_ne!(b.external_id, c.external_id);
+    }
+
+    #[test]
+    fn booking_id_includes_a_fee() {
+        let a = parse_booking(&entry(
+            "2026-10-01 10:00:00",
+            "WITHDRAWAL",
+            "100",
+            "1.50",
+            None,
+        ))
+        .unwrap();
+        let b = parse_booking(&entry(
+            "2026-10-01 10:00:00",
+            "WITHDRAWAL",
+            "100",
+            "2.00",
+            None,
+        ))
+        .unwrap();
+        assert_eq!(
+            a.external_id,
+            "monefit:2026-10-01 10:00:00|WITHDRAWAL|100|1.5"
+        );
+        assert_ne!(a.external_id, b.external_id);
     }
 
     #[test]

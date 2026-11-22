@@ -35,8 +35,9 @@ arbeitet.
 * Buchungsdatum ist der Kalendertag aus `time`. Gegenpartei ist „Monefit SmartSaver“,
   Verwendungszweck ist `description` (sonst der Buchungstyp).
 * Das Feld `id` der Liste ist **keine** Buchungs-ID: alle Zinsbuchungen tragen dieselbe.
-  Die Buchungs-ID wird deshalb aus Zeitstempel (sekundengenau), Typ und normalisiertem Betrag
-  gebildet; gleiche Buchungen in derselben Sekunde werden durchnummeriert (`#1`, `#2` …).
+  Die Buchungs-ID wird deshalb aus Zeitstempel (sekundengenau), Typ, normalisiertem Betrag und
+  gegebenenfalls der Gebühr gebildet; völlig gleiche Buchungen in derselben Sekunde werden
+  durchnummeriert (`#1`, `#2` …).
 * Passwort und Token gehen nur an `https://api-smartsaver.monefit.com`; Weiterleitungen werden nicht verfolgt.
 * Eine Buchung ohne lesbares Datum oder ohne lesbaren Betrag verwirft den ganzen Abruf, ebenso ein fehlender
   Saldo oder eine Umsatzantwort, die keine Liste ist. Eine fehlende Gebühr zählt als 0.
