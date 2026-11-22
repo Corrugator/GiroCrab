@@ -1349,11 +1349,12 @@ impl MerchantRules {
 
     /// What a payment processor (`needle` in the counterparty) collected for: an own or
     /// bundled merchant behind its name or in the purpose, else the shop named right
-    /// after its `*` (#243). `None` when nothing is behind it.
+    /// after its `*` (#243). `own`: the own processor `needle` belongs to. `None` when
+    /// nothing is behind it.
     fn look_behind(
         &self,
         needle: &str,
-        own: bool,
+        own: Option<&CustomEntry>,
         counterparty: &str,
         purpose: &str,
         t: &Texts,
@@ -1365,7 +1366,7 @@ impl MerchantRules {
         };
         // An own search word matched as a whole word in `wcp`, which `cp` may spell
         // differently ("paypal  europe" around a dropped legal form, long digit runs cut).
-        let (behind, wbehind) = if own {
+        let (behind, wbehind) = if own.is_some() {
             let wbehind = word_starts(&t.wcp, needle)
                 .next()
                 .map(|i| t.wcp[i + needle.len()..].to_string())
@@ -1398,10 +1399,10 @@ impl MerchantRules {
         // not win over the shop a second time, so the shop is then resolved without it.
         // A purpose that doesn't name it keeps what it names (another processor, an own
         // merchant). An empty purpose never retries: nested processors would double the work.
-        let named_again = if own {
-            word_starts(&t.wpu, needle).next().is_some()
-        } else {
-            needle_in(&t.pu, needle)
+        let named_again = match own {
+            // by any of its search words, not only the one in the counterparty
+            Some(c) => c.matched_in(&t.wpu, &t.wctx, 0).is_some(),
+            None => needle_in(&t.pu, needle),
         };
         behind_processor(counterparty).map(|shop| {
             let found = self.resolve_uncached(&shop, purpose);
@@ -1425,7 +1426,7 @@ impl MerchantRules {
         if let Some(c) = self.best_custom(|c| c.longest_in(&t.wcp, &t.wctx, 0)) {
             if c.kind() == K::PaymentService
                 && let Some(needle) = c.matched_in(&t.wcp, &t.wctx, 0)
-                && let Some(real) = self.look_behind(needle, true, counterparty, purpose, &t)
+                && let Some(real) = self.look_behind(needle, Some(c), counterparty, purpose, &t)
             {
                 return real;
             }
@@ -1438,7 +1439,7 @@ impl MerchantRules {
         if let Some(entry) = self.find_checked(&t.cp, &t.ctx) {
             if entry.kind == K::PaymentService
                 && let Some(real) =
-                    self.look_behind(entry.needles[0], false, counterparty, purpose, &t)
+                    self.look_behind(entry.needles[0], None, counterparty, purpose, &t)
             {
                 return real;
             }
@@ -2606,6 +2607,17 @@ mod tests {
         // behind the whole-word match, not an earlier embedded one (#1519 review)
         let cp = "NotPayPal GmbH Europe Spotify PayPal Europe";
         assert_eq!(r.resolve(cp, "").key, "u:p");
+        // the purpose names it by another of its search words (#1694 review)
+        let r = rules(
+            &[("p", "Mein PayPal", &["paypal europe", "paypal"], "paypal")],
+            &["paypal"],
+            true,
+        );
+        assert_eq!(
+            r.resolve("PAYPAL EUROPE *HAENDLER MUSTER", "PAYPAL *HAENDLER MUSTER")
+                .name,
+            "Haendler Muster"
+        );
     }
 
     #[test]
