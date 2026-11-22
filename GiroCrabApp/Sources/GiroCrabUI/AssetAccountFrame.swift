@@ -114,6 +114,7 @@ struct AssetAccountFrame<Top: View, Header: View, Metrics: View, Analysis: View,
 struct AssetHeaderCard<Subtitle: View, ValueNote: View, Accessory: View, Actions: View>: View {
     @Environment(AppModel.self) private var model
     @Environment(\.textScale) private var textScale
+    @Environment(\.reportRedaction) private var redaction
     @AppStorage(ViewLayout.compactHeaderKey) private var compactHeader = false
     @State private var showDocuments = false
     /// Too narrow for name and value side by side (iPhone, large text): one below the other.
@@ -193,12 +194,41 @@ struct AssetHeaderCard<Subtitle: View, ValueNote: View, Accessory: View, Actions
         .capturablePopover(isPresented: $model.showCustomPeriod, arrowEdge: .bottom) { CustomPeriodForm() }
     }
 
+    /// Folded: "bank · IBAN · own note" next to the name (GitHub #1621).
+    private var compactLine: String {
+        let iban = account.iban.isEmpty ? "" : formatIBAN(account.iban)
+        let subtitle = [account.bankName, iban].filter { !$0.isEmpty }.joined(separator: " · ")
+        return CompactAccountLine.text(subtitle: subtitle, note: model.accountNote(for: account.id))
+    }
+
     private var titleBlock: some View {
         HStack(alignment: .top, spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).sensitive()
-                    .appFont(compactHeader ? .headline : .title2, weight: .semibold)
-                    .foregroundStyle(Theme.text).lineLimit(stacked ? 2 : 1).minimumScaleFactor(stacked ? 1 : 0.7)
+                if compactHeader, !stacked, !compactLine.isEmpty {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(title).sensitive()
+                            .appFont(.headline, weight: .semibold)
+                            .foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.7)
+                            .layoutPriority(1)
+                        Text(compactLine).sensitive()
+                            .appFont(.caption)
+                            .foregroundStyle(Theme.secondary)
+                            .lineLimit(1)
+                            .help(redaction.masking(compactLine))
+                    }
+                } else {
+                    Text(title).sensitive()
+                        .appFont(compactHeader ? .headline : .title2, weight: .semibold)
+                        .foregroundStyle(Theme.text).lineLimit(stacked ? 2 : 1).minimumScaleFactor(stacked ? 1 : 0.7)
+                }
+                if compactHeader, stacked, !compactLine.isEmpty {
+                    // narrow (iPhone): the line goes below the name instead of beside it
+                    Text(compactLine).sensitive()
+                        .appFont(.caption)
+                        .foregroundStyle(Theme.secondary)
+                        .lineLimit(1)
+                        .help(redaction.masking(compactLine))
+                }
                 if !compactHeader {
                     subtitle()
                 }
