@@ -23,6 +23,8 @@ public final class AppModel {
     private(set) var vault: Vault? {
         didSet {
             vaultRevision &+= 1
+            showRuleEditor = false
+            ruleDraft = nil
             advanziaWorkflow?.cancel()
             if vault != nil { refreshSidebarCounts() }
         }
@@ -623,6 +625,10 @@ public final class AppModel {
     @ObservationIgnored var rulesStale = false
     @ObservationIgnored var dashboardStale = false
     var ruleDraft: Rule?
+    #if os(macOS)
+    // Opening commands also raise an editor that is already open.
+    var ruleEditorRequest = 0
+    #endif
     var showSettings = false
     var showCommandPalette = false
     /// macOS: the "Problem melden" window is open. Greys out its menu item
@@ -1130,17 +1136,14 @@ public final class AppModel {
             ToolbarSearch.focus() // Bearbeiten › Suchen … (⌘F)
             #endif
         case "rules":
-            ruleDraft = nil
-            showRuleEditor = true
+            openRuleEditor()
         case "rule-edit":
             // a rule opened in the editor (#179 pattern field)
-            ruleDraft = rules.first
-            showRuleEditor = true
+            openRuleEditor(draft: rules.first)
         case "rule-tags":
             // a rule that only adds tags (#580)
             reloadRules()
-            ruleDraft = rules.first { $0.categoryId == 0 } ?? rules.first
-            showRuleEditor = true
+            openRuleEditor(draft: rules.first { $0.categoryId == 0 } ?? rules.first)
         case "palette":
             showCommandPalette = true
         case "categorizer":

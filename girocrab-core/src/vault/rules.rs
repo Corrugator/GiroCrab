@@ -333,18 +333,21 @@ impl Vault {
     }
 
     /// Applies just this rule to existing bookings on explicit request.
-    /// `only_uncategorized = false` also replaces manually assigned categories.
+    /// Category rules with higher priority retain precedence. `only_uncategorized = false`
+    /// allows replacing manually assigned categories when this rule takes precedence.
     pub fn apply_rule(&self, rule_id: i64, only_uncategorized: bool) -> Result<u32, CoreError> {
         let db = self.db()?;
         let tx = db.unchecked_transaction()?;
-        let Some(rule) = Self::load_rules(&tx)?
-            .into_iter()
-            .find(|rule| rule.id == rule_id && rule.enabled)
+        let rules = Self::load_rules(&tx)?;
+        let Some(index) = rules
+            .iter()
+            .position(|rule| rule.id == rule_id && rule.enabled)
         else {
             return Ok(0);
         };
+        let rule = &rules[index];
         let category_id = rule.category_id;
-        let set = RuleSet::new(vec![rule])?;
+        let set = RuleSet::new(vec![rule.clone()])?;
 
         // Tag before categorising so both operations see the original category scope.
         let uncategorized_ids = if only_uncategorized && set.sets_tags() {
@@ -362,6 +365,15 @@ impl Vault {
         let mut changed = crate::tags::tag_by_rules(&tx, &set, true, uncategorized_ids.as_ref())?;
 
         if category_id != 0 {
+            // Earlier rules are only consulted to determine precedence. This
+            // operation writes categories and tags from the selected rule alone.
+            let higher_priority = RuleSet::new(
+                rules
+                    .into_iter()
+                    .take(index)
+                    .filter(|rule| rule.enabled && rule.category_id != 0)
+                    .collect(),
+            )?;
             let mut stmt = tx.prepare(&format!(
                 "SELECT {} FROM transactions t JOIN accounts a ON a.id = t.account_id
                  WHERE {LIVE_BOOKINGS_SQL} AND a.archived_unix IS NULL
@@ -372,7 +384,9 @@ impl Vault {
             let mut matching = Vec::<i64>::new();
             let mut rows = stmt.query(params![only_uncategorized, category_id])?;
             while let Some(row) = rows.next()? {
-                if set.categorise(&RuleRow::borrowed_input(row)?).is_some() {
+                let input = RuleRow::borrowed_input(row)?;
+                if set.categorise(&input).is_some() && higher_priority.categorise(&input).is_none()
+                {
                     matching.push(row.get(0)?);
                 }
             }
@@ -791,5 +805,67 @@ mod apply_rules_to_tests {
         assert_eq!(source("deleted"), "none");
         assert_eq!(source("archived"), "none");
         assert_eq!(source("outside"), "none", "not in the set");
+    }
+}
+
+#[cfg(test)]
+mod apply_rule_tests {
+    use super::*;
+
+    #[test]
+    fn applies_one_rule_with_scope_and_precedence() {
+        let dir = crate::test_support::TempDir::new("girocrab-apply-one-rule");
+        let path = dir.join("v.db");
+        let vault = Vault::open(path.to_string_lossy().to_string(), vec![7u8; 32]).unwrap();
+        vault
+            .db()
+            .unwrap()
+            .execute_batch(
+                "INSERT INTO account_groups(name) VALUES ('G');
+             INSERT INTO accounts(group_id, external_ref, name) VALUES (1, 'A1', 'Konto');
+             INSERT INTO categories(name) VALUES ('Neue Kategorie'), ('Bestehende Kategorie');
+             INSERT INTO rules(name, category_id, field, match_kind, pattern, priority, enabled)
+             VALUES ('Higher priority', 2, 'any', 'keyword', 'Priority', 10, 1),
+                    ('Selected', 1, 'any', 'keyword', 'Demo', 20, 1),
+                    ('Disabled', 2, 'any', 'keyword', 'Demo', 5, 0);
+             INSERT INTO transactions(account_id, external_id, booking_date, amount_cents,
+                                      counterparty, category_id, category_source, rule_id)
+             VALUES (1, 'empty', '2026-01-02', -100, 'Demo New', NULL, 'none', NULL),
+                    (1, 'manual', '2026-01-02', -100, 'Demo Manual', 2, 'manual', NULL),
+                    (1, 'split', '2026-01-02', -100, 'Demo Split', NULL, 'none', NULL),
+                    (1, 'higher', '2026-01-02', -100, 'Demo Priority', 2, 'rule', 1),
+                    (1, 'higher-empty', '2026-01-02', -100, 'Demo Priority', NULL, 'none', NULL),
+                    (1, 'stale', '2026-01-02', -100, 'Demo Stale', 2, 'rule', 1),
+                    (1, 'unmatched', '2026-01-02', -100, 'Priority Only', NULL, 'none', NULL);
+             INSERT INTO transaction_splits(transaction_id, category_id, amount_cents)
+             VALUES (3, 2, -100);",
+            )
+            .unwrap();
+        let category = |id: &str| -> Option<i64> {
+            vault
+                .db()
+                .unwrap()
+                .query_row(
+                    "SELECT category_id FROM transactions WHERE external_id = ?1",
+                    [id],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
+
+        assert_eq!(vault.apply_rule(3, false).unwrap(), 0);
+        assert_eq!(category("empty"), None);
+        assert_eq!(vault.apply_rule(2, true).unwrap(), 1);
+        assert_eq!(category("empty"), Some(1));
+        assert_eq!(category("manual"), Some(2));
+        assert_eq!(category("stale"), Some(2));
+
+        assert_eq!(vault.apply_rule(2, false).unwrap(), 2);
+        assert_eq!(category("manual"), Some(1));
+        assert_eq!(category("stale"), Some(1));
+        assert_eq!(category("higher"), Some(2));
+        assert_eq!(category("higher-empty"), None);
+        assert_eq!(category("unmatched"), None);
+        assert_eq!(category("split"), None);
     }
 }

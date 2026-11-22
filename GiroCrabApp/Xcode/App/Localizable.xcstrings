@@ -26827,6 +26827,39 @@
         }
       }
     },
+    "Regel gespeichert – geänderte Buchungen: %u" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rule saved. Transactions changed: %u"
+          }
+        }
+      }
+    },
+    "Regel gespeichert – keine Buchungen geändert" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rule saved. No transactions changed."
+          }
+        }
+      }
+    },
+    "Regel gespeichert, Anwenden fehlgeschlagen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rule Saved but Couldn’t Be Applied"
+          }
+        }
+      }
+    },
     "Regel konnte nicht gespeichert werden" : {
       "extractionState" : "manual",
       "localizations" : {
