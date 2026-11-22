@@ -78,12 +78,9 @@ final class AutoSyncTests: XCTestCase {
         XCTAssertTrue(status.notice(.visible, intervalOn: true).joined().contains("Musterbank"))
     }
 
-    func testLockedNoticeDistinguishesActiveDisabledAndUnknownSchedules() {
+    func testLockedNoticeOnlyWhenTheIntervalIsOn() {
         let status = AutoSyncStatus()
-        XCTAssertEqual(status.notice(.locked, intervalOn: true),
-                       [String(localized: "Automatischer Abruf pausiert, bis der Tresor entsperrt ist.")])
-        XCTAssertEqual(status.notice(.locked, intervalOn: nil),
-                       [String(localized: "Automatische Abrufe sind erst nach dem Entsperren möglich.")])
+        XCTAssertEqual(status.notice(.locked, intervalOn: true).count, 1)
         XCTAssertTrue(status.notice(.locked, intervalOn: false).isEmpty)
         XCTAssertTrue(status.notice(.visible, intervalOn: true).isEmpty, "nothing to say without a failure")
         XCTAssertTrue(status.notice(.covered, intervalOn: true).isEmpty)

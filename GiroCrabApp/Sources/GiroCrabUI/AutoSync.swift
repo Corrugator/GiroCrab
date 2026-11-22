@@ -65,19 +65,12 @@ struct AutoSyncStatus: Equatable {
     var failureDetail: String?
     var failed: Bool { failureDetail != nil }
 
-    /// When locked, a missing interval state means the vault hasn't been read yet.
-    /// Only an unlocked, visible popover may show failure details.
-    func notice(_ visibility: MenuBarSummary.Visibility, intervalOn: Bool?) -> [String] {
+    /// Notice lines for the popover; empty when there is nothing to say. Locked:
+    /// only that the fetch is paused. Private: only that and when, no detail.
+    func notice(_ visibility: MenuBarSummary.Visibility, intervalOn: Bool) -> [String] {
         switch visibility {
         case .locked:
-            switch intervalOn {
-            case .some(true):
-                return [String(localized: "Automatischer Abruf pausiert, bis der Tresor entsperrt ist.")]
-            case .some(false):
-                return []
-            case nil:
-                return [String(localized: "Automatische Abrufe sind erst nach dem Entsperren möglich.")]
-            }
+            return intervalOn ? [String(localized: "Automatischer Abruf pausiert, bis der Tresor entsperrt ist.")] : []
         case .covered:
             return failed ? [String(localized: "Der letzte automatische Abruf ist fehlgeschlagen.")] : []
         case .visible:

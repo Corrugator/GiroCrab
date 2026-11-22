@@ -6095,16 +6095,6 @@
         }
       }
     },
-    "Automatische Abrufe sind erst nach dem Entsperren möglich." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Automatic fetches are available after unlocking the vault."
-          }
-        }
-      }
-    },
     "Automatische Erkennung wiederherstellen" : {
       "extractionState" : "manual",
       "localizations" : {
