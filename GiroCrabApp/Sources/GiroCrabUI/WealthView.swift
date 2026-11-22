@@ -79,9 +79,9 @@ struct WealthSummary: Equatable {
     }
 
     /// The cash accounts by kind (#1631), largest subtotal first like the donut; equal subtotals in
-    /// the order of the import choices. Kinds without an account are left out.
+    /// the order of the "Kontoart" sidebar sections (#1620). Kinds without an account are left out.
     var cashByKind: [CashKindGroup] {
-        let order = AccountKind.importChoices
+        let order = CashKindGroup.sectionOrder
         return Dictionary(grouping: cash, by: \.kind)
             .map { CashKindGroup(kind: $0.key, accounts: $0.value) }
             .sorted {
@@ -97,6 +97,19 @@ struct CashKindGroup: Equatable {
     let accounts: [Account]
     var id: String { "kind:\(kind)" }
     var cents: Int64 { accounts.reduce(0) { $0 + $1.balanceCents } }
+
+    /// The order of the sections of the "Kontoart" sidebar view (`group_for` in the core, #1620).
+    static let sectionOrder: [AccountKind] = [.checking, .savings, .timeDeposit, .cash, .paymentService, .creditCard, .brokerage, .loan]
+
+    /// A heading for several accounts, as the "Kontoart" sidebar view names its sections (#1620):
+    /// "Girokonten", "Zahlungsdienste". `AccountKind.label` stays singular: it names one account's kind.
+    var title: String {
+        switch kind {
+        case .checking: String(localized: "Girokonten")
+        case .paymentService: String(localized: "Zahlungsdienste")
+        default: kind.label
+        }
+    }
 }
 
 /// One security summed over all depots.
@@ -384,7 +397,7 @@ struct WealthView: View {
                         if scope == .cash && grouping == .accountKind {
                             // one card per kind with its subtotal; a slice keeps its kind
                             ForEach(s.cashByKind.filter { slice.keeps($0.id) }, id: \.id) { group in
-                                listCard(Text(group.kind.label), total: group.cents, accounts: group.accounts, tint: Theme.inflow)
+                                listCard(Text(group.title), total: group.cents, accounts: group.accounts, tint: Theme.inflow)
                             }
                         } else {
                             let cash = scope == .cash ? s.cash.filter { slice.keeps($0.id.description) } : s.cash
@@ -646,7 +659,7 @@ struct WealthView: View {
             return (String(localized: "Zusammensetzung"), out.filter { $0.cents > 0 })
         case .cash:
             if grouping == .accountKind {
-                return (String(localized: "Cash nach Kontoart"), top(s.cashByKind.map { ($0.id, $0.kind.label, $0.cents) }))
+                return (String(localized: "Cash nach Kontoart"), top(s.cashByKind.map { ($0.id, $0.title, $0.cents) }))
             }
             return (String(localized: "Cash nach Konto"), top(s.cash.map { ($0.id.description, $0.name, $0.balanceCents) }))
         case .securities:

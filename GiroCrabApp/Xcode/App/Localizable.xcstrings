@@ -16118,6 +16118,17 @@
         }
       }
     },
+    "Girokonten" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking accounts"
+          }
+        }
+      }
+    },
     "Girokonto" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -33105,6 +33116,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Payment service"
+          }
+        }
+      }
+    },
+    "Zahlungsdienste" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Payment services"
           }
         }
       }

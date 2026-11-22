@@ -97,12 +97,18 @@ final class WealthSummaryTests: XCTestCase {
         }
         let s = WealthSummary(accounts: [
             account(1, .checking, 1_000), account(2, .timeDeposit, 5_000), account(3, .checking, 2_000),
-            account(4, .savings, 3_000), account(5, .cash, 3_000), account(6, .brokerage, 9_999),
+            account(7, .paymentService, 3_000), account(4, .savings, 3_000), account(5, .cash, 3_000),
+            account(6, .brokerage, 9_999),
         ])
         let groups = s.cashByKind
-        // largest subtotal first, equal ones in the order of the import choices; the depot is no cash
-        XCTAssertEqual(groups.map(\.kind), [.timeDeposit, .checking, .savings, .cash])
-        XCTAssertEqual(groups.map(\.cents), [5_000, 3_000, 3_000, 3_000])
+        // largest subtotal first, equal ones in the order of the "Kontoart" sidebar sections (#1620):
+        // Bargeld before Zahlungsdienste; the depot is no cash
+        XCTAssertEqual(groups.map(\.kind), [.timeDeposit, .checking, .savings, .cash, .paymentService])
+        XCTAssertEqual(groups.map(\.cents), [5_000, 3_000, 3_000, 3_000, 3_000])
+        // headings for several accounts, as the sidebar sections name them (#1620)
+        XCTAssertEqual(groups.first { $0.kind == .checking }?.title, String(localized: "Girokonten"))
+        XCTAssertEqual(groups.first { $0.kind == .paymentService }?.title, String(localized: "Zahlungsdienste"))
+        XCTAssertEqual(groups.first { $0.kind == .savings }?.title, AccountKind.savings.label)
         XCTAssertEqual(groups.first { $0.kind == .checking }?.accounts.map(\.id).sorted(), [1, 3])
         XCTAssertEqual(groups.reduce(0) { $0 + $1.cents }, s.cashCents)
         XCTAssertEqual(Set(groups.map(\.id)).count, groups.count)
