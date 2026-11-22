@@ -140,6 +140,16 @@ final class WealthSummaryTests: XCTestCase {
         XCTAssertEqual(section.name, accountKindSection(kind: .buildingSavings).name)
     }
 
+    /// Review of #1650: when the last account of the selected section takes another kind, the
+    /// selection does not widen to all accounts under the old section's name.
+    func testAnEmptiedSectionIsNotLeftSelected() throws {
+        let model = AppModel(options: LaunchOptions(arguments: ["--demo-seed"], environment: [:]))
+        let single = try XCTUnwrap(model.groups.first { $0.accounts.count == 1 && $0.accounts[0].kind != .buildingSavings })
+        model.sidebarSelection = .group(single.id)
+        model.setAccountKind(single.accounts[0].id, to: .buildingSavings)
+        XCTAssertEqual(model.sidebarSelection, .allAccounts)
+    }
+
     func testPositiveCardBalanceStaysAnAssetWhenDebtsAreLeftOut() throws {
         let model = AppModel(options: LaunchOptions(arguments: ["--demo-seed"], environment: [:]))
         var card = try XCTUnwrap(model.allAccounts.first { $0.kind == .creditCard })

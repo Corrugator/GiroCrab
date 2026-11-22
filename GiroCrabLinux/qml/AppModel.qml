@@ -606,6 +606,10 @@ QtObject {
                 sidebarSelection = "all"
             if (sidebarSelection.startsWith("bank:") && !bankGroup(sidebarSelection.slice(5)))
                 sidebarSelection = "all"
+            // a section whose last account left (another kind, #1630): no account ids would
+            // filter as "all accounts" while the sidebar still names the section
+            if (sidebarSelection.startsWith("group:") && !groups.some(g => "group:" + g.id === sidebarSelection && g.accounts.length > 0))
+                sidebarSelection = "all"
             rebuildAccountIndex()
             applyAssets(r[3], r[4])
             const queue = afterAccountsQueue
