@@ -105,9 +105,8 @@ pub(crate) const COMDIRECT: DocumentMatchRules = DocumentMatchRules {
     ],
     slack_days: 5,
     inflow: |title, text| {
-        let (event, rest) = title.split_once('(').map_or((title, ""), |(h, t)| (h, t));
-        let security = rest.split_once(')').map_or(rest, |(name, _)| name);
-        inflow_in_without(event, text, &[security], 1500)
+        let (event, groups) = split_event_and_parenthesized(title);
+        inflow_in_without(event, text, &groups, 1500)
     },
 };
 
@@ -141,6 +140,34 @@ fn comdirect_subjects(title: &str, text: &str) -> Vec<String> {
 /// debit: a purchase, a savings plan; `None` no event word), from the first event word in its title and
 /// the first `text_chars` characters of its text. Boilerplate further down ("Kauf und Verkauf …") is not
 /// read, so how far the head reaches is the bank's call. Shared by Trade Republic and comdirect.
+fn split_event_and_parenthesized(title: &str) -> (&str, Vec<&str>) {
+    let Some((event, _)) = title.split_once('(') else {
+        return (title, Vec::new());
+    };
+    let (mut groups, mut depth, mut start) = (Vec::new(), 0usize, 0usize);
+    for (idx, ch) in title.char_indices() {
+        match ch {
+            '(' => {
+                if depth == 0 {
+                    start = idx + ch.len_utf8();
+                }
+                depth += 1;
+            }
+            ')' if depth > 0 => {
+                depth -= 1;
+                if depth == 0 {
+                    groups.push(&title[start..idx]);
+                }
+            }
+            _ => {}
+        }
+    }
+    if depth > 0 && start <= title.len() {
+        groups.push(&title[start..]);
+    }
+    (event, groups)
+}
+
 pub(crate) fn inflow_in_without(
     title: &str,
     text: &str,
@@ -1102,6 +1129,42 @@ mod tests {
         assert_eq!(
             match_by_content(text, subject, &bookings[..1], 5, Some(true)),
             Some(1)
+        );
+    }
+    #[test]
+    fn nested_parentheses_in_comdirect_title_are_masked() {
+        assert_eq!(
+            (COMDIRECT.inflow)(
+                "Wertpapierabrechnung WKN A1JX52 (Vanguard (USD) Dividenden ETF)",
+                "Vanguard (USD) Dividenden ETF Kauf"
+            ),
+            Some(false)
+        );
+    }
+    #[test]
+    fn nested_parentheses_pick_debit_over_credit_booking() {
+        let title = "Wertpapierabrechnung WKN A1JX52 (Vanguard (USD) Dividenden ETF)";
+        let text = "Wertpapierabrechnung\nVanguard (USD) Dividenden ETF\nGeschäftsart: Kauf\nZu Ihren Lasten 25,00 EUR\n04.12.2025";
+        let inflow = (COMDIRECT.inflow)(title, text);
+        assert_eq!(inflow, Some(false));
+        let bookings = vec![
+            (
+                1,
+                "2025-12-04".to_string(),
+                25_00,
+                "A1JX52 Vanguard Dividenden ETF".to_string(),
+            ),
+            (
+                2,
+                "2025-12-04".to_string(),
+                -25_00,
+                "A1JX52 Vanguard Dividenden ETF".to_string(),
+            ),
+        ];
+        let days = vec![crate::dates::parse_iso("2025-12-04").unwrap()];
+        assert_eq!(
+            match_by_amounts(&[25_00], &days, "A1JX52", &bookings, 5, inflow),
+            BookingMatch::Unique(2)
         );
     }
 }
