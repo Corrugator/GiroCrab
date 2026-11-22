@@ -201,6 +201,47 @@ fn resort_retypes_portal_statements_without_moving_them() {
 }
 
 #[test]
+fn resort_retypes_statements_after_duplicate_portal_logins_are_merged() {
+    for kind in [ConnectorKind::Fnz, ConnectorKind::Quirion] {
+        let (_dir, v) = open_vault("girocrab-resort-merged-portal");
+        let key = kind.as_str();
+        let keeper = v
+            .add_bank_connection(kind, String::new(), "login".into())
+            .unwrap();
+        let duplicate = {
+            let db = v.db().unwrap();
+            db.execute(
+                "INSERT INTO bank_connections(connector, display_name, login_name) VALUES (?1, 'Duplicate', 'login')",
+                [key],
+            ).unwrap();
+            db.last_insert_rowid()
+        };
+        let source = format!("{key}:{duplicate}:statement");
+        let receipt = crate::documents::RemoteDocument {
+            source_url: source.clone(),
+            ..cd_document(
+                "statement",
+                CD_GIRO,
+                "Kontoauszug Nr. 5",
+                "postbox",
+                crate::documents::simple_pdf(&["Kontoauszug".to_owned()]),
+                "2025-12-04",
+            )
+        };
+        store_fetch(&v, kind, duplicate, cd_fetch(false, vec![], vec![receipt])).unwrap();
+        let account = account_id_of(&v, CD_GIRO);
+
+        assert_eq!(v.deduplicate_bank_connections().unwrap(), 1);
+        assert_eq!(v.connection_status(keeper).unwrap().account_count, 2);
+        assert_eq!(v.resort_portal_documents(keeper).unwrap().resorted, 1);
+        let doc = v.list_all_documents(Default::default()).unwrap().remove(0);
+        assert_eq!(doc.source_url, source);
+        assert_eq!(doc.doc_type, "kontoauszug");
+        assert_eq!(doc.account_id, Some(account));
+    }
+}
+
+#[test]
 fn resort_files_a_trade_republic_dividend_at_the_depot_using_the_stored_title() {
     let (_dir, v) = open_vault("girocrab-resort-tr-dividend");
     let kind = ConnectorKind::TradeRepublic;
