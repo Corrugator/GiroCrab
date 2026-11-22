@@ -2827,7 +2827,8 @@ QtObject {
     }
     /// AccountGroupsModel.swift › setAccountKind ("Kontoart ändern …").
     function setAccountKind(id, kind) {
-        if (run(() => { core("set_account_kind", { account_id: id, kind: kind }); return true })) { reloadAccounts(); reloadDashboard() }
+        // the kind decides what "Verfügbar" and its history count (Bausparen does not, #1630)
+        if (run(() => { core("set_account_kind", { account_id: id, kind: kind }); return true })) { reloadAccounts(); reloadHistory(); reloadDashboard() }
     }
     /// AccountKind.importChoices with their labels.
     readonly property var accountKindChoices: [

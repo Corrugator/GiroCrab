@@ -127,7 +127,10 @@ final class WealthSummaryTests: XCTestCase {
         XCTAssertTrue(model.liquidAccounts.map(\.id).contains(savings.id))
         XCTAssertTrue(AccountKind.importChoices.contains(.buildingSavings))
 
+        let totalsBefore = model.totalsVersion
         model.setAccountKind(savings.id, to: .buildingSavings)
+        // "Verfügbar" and its history count other accounts now: the totals reload
+        XCTAssertGreaterThan(model.totalsVersion, totalsBefore)
         let contract = try XCTUnwrap(model.allAccounts.first { $0.id == savings.id })
         XCTAssertEqual(contract.kind, .buildingSavings)
         XCTAssertEqual(WealthBucket.bucket(for: contract), .cash)
