@@ -677,16 +677,22 @@ impl FinTsConnector {
     /// two-step functions, then the same function without HKTAN in the init. Only an answer
     /// without errors is kept (function or flag go into the state); otherwise the state is as
     /// it was and `None` leaves the original answer to be reported.
-    async fn retry_init_without_refused_hktan(
+    pub(super) async fn retry_init_without_refused_hktan(
         &mut self,
         ctx: &ConnectContext,
     ) -> CoreResult<Option<BankReply>> {
-        let refused = (self.st.sec_func.clone(), self.st.tan_method_name.clone());
-        let found = self.try_init_variants(ctx, &refused.0).await;
+        let refused = (
+            self.st.sec_func.clone(),
+            self.st.tan_method_name.clone(),
+            self.st.init_without_hktan,
+        );
+        let found = self.try_init_variants(ctx, &refused).await;
         if !matches!(found, Ok(Some(_))) {
-            self.st.sec_func = refused.0;
-            self.st.tan_method_name = refused.1;
-            self.st.init_without_hktan = false;
+            (
+                self.st.sec_func,
+                self.st.tan_method_name,
+                self.st.init_without_hktan,
+            ) = refused;
         }
         found
     }
@@ -694,12 +700,14 @@ impl FinTsConnector {
     async fn try_init_variants(
         &mut self,
         ctx: &ConnectContext,
-        refused: &str,
+        refused: &(String, String, bool),
     ) -> CoreResult<Option<BankReply>> {
-        for (code, name) in self.tan_function_fallbacks(refused) {
+        let refused_code = refused.0.as_str();
+        for (code, name) in self.tan_function_fallbacks(refused_code) {
             crate::depot_debug::log(&format!(
-                "fints: login HKTAN refused with function {refused}, trying {code}"
+                "fints: login HKTAN refused with function {refused_code}, trying {code}"
             ));
+            self.st.init_without_hktan = false;
             self.st.sec_func = code.clone();
             self.st.tan_method_name = name;
             if let Some(reply) = self.init_attempt(ctx, &code).await? {
@@ -707,10 +715,12 @@ impl FinTsConnector {
             }
         }
         crate::depot_debug::log(&format!(
-            "fints: login HKTAN refused with function {refused}, trying without HKTAN"
+            "fints: login HKTAN refused with function {refused_code}, trying without HKTAN"
         ));
+        self.st.sec_func = refused.0.clone();
+        self.st.tan_method_name = refused.1.clone();
         self.st.init_without_hktan = true;
-        self.init_attempt(ctx, refused).await
+        self.init_attempt(ctx, refused_code).await
     }
 
     /// A fresh dialog init; the answer if it has no errors and opened a dialog, otherwise the

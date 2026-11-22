@@ -343,6 +343,41 @@ async fn dialog_init_9110_falls_back_to_init_without_hktan_and_persists() {
 }
 
 #[tokio::test]
+async fn dialog_init_9110_without_hktan_after_failed_alternative_keeps_the_refused_function() {
+    let (url, seen) = mock_bank(vec![REJECT_9110, REJECT_9110, ACCEPT]);
+    let mut state =
+        state_with_functions("913", &[("913", "chipTAN QR"), ("911", "chipTAN optisch")]);
+    state["tan_method_name"] = "chipTAN QR".into();
+    let mut c = two_step_connector(&url, state);
+    assert!(matches!(
+        c.open_dialog(&test_ctx()).await.unwrap(),
+        Phase::Ready
+    ));
+    assert_eq!(seen.lock().unwrap().len(), 3);
+    assert_eq!(c.sec(), "913");
+    assert_eq!(c.st.tan_method_name, "chipTAN QR");
+    assert!(c.st.init_without_hktan);
+}
+
+#[tokio::test]
+async fn dialog_init_9110_failure_restores_a_saved_init_without_hktan() {
+    let (url, _) = mock_bank(vec![REJECT_9110]);
+    let mut state = state_with_functions("913", &[("913", "a"), ("911", "b")]);
+    state["init_without_hktan"] = true.into();
+    let mut c = two_step_connector(&url, state);
+    // the saved flag omits HKTAN, so the bank's 9110 names something else: force the retry
+    // by calling it directly
+    assert!(
+        c.retry_init_without_refused_hktan(&test_ctx())
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(c.st.sec_func, "913");
+    assert!(c.st.init_without_hktan);
+}
+
+#[tokio::test]
 async fn dialog_init_9110_with_no_working_variant_keeps_the_state() {
     let (url, seen) = mock_bank(vec![REJECT_9110]);
     let state = state_with_functions("913", &[("913", "chipTAN QR"), ("911", "chipTAN optisch")]);
