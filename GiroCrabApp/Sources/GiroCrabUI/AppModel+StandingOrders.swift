@@ -134,6 +134,7 @@ extension AppModel {
         transferBusy = false
         activeTransferIsStanding = false
         let action = standingDraft.action
+        let accountID = standingDraft.accountID
         standingDraft = StandingDraft()
         plannedVersion += 1
         switch action {
@@ -142,6 +143,16 @@ extension AppModel {
         case .delete: toast = String(localized: "Dauerauftrag gelöscht")
         }
         reloadAll()
+        if action == .create { fetchAfterNewStandingOrder(accountID) }
+    }
+
+    /// A new order has no order number until the bank reports it, and without one it can be neither
+    /// changed nor deleted (#1475): fetch its account once now instead of at the next manual fetch.
+    /// Only where that needs no PIN prompt out of the blue (a stored PIN); the demo has no bank to ask.
+    private func fetchAfterNewStandingOrder(_ accountID: Int64?) {
+        guard !isDemo, let account = allAccounts.first(where: { $0.id == accountID }),
+              let cid = account.connectionId, connectionStatus(cid)?.hasPin == true else { return }
+        requestSyncAccount(account)
     }
 
     /// The bank may have executed it: no retry, say so.
