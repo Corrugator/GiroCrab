@@ -8959,6 +8959,17 @@
         }
       }
     },
+    "Cash nach Kontoart" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cash by account type"
+          }
+        }
+      }
+    },
     "Cash-Verlauf" : {
       "extractionState" : "manual",
       "localizations" : {
