@@ -1061,6 +1061,7 @@ pub(crate) fn store_fetch(
         }
         // Accounts by the name they carry here instead of their bank reference (an IBAN).
         let mut warnings = std::mem::take(&mut data.warnings);
+        let hints = std::mem::take(&mut data.hints);
         if !warnings.is_empty() {
             for acc in data.accounts.iter().filter(|a| !a.external_ref.is_empty()) {
                 let name: Option<String> = tx
@@ -1112,6 +1113,7 @@ pub(crate) fn store_fetch(
             revoked_accounts,
             postbox_documents,
             warnings,
+            hints,
         })
     }
 }

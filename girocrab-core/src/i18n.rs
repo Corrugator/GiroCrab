@@ -757,8 +757,11 @@ fn english(de: &str) -> Option<&'static str> {
         "PIN ist leer" => "PIN is empty",
         "TAN-Verfahren {0}" => "TAN method {0}",
         "{0}: Freigabe ohne Auftragsreferenz" => "{0}: approval without task reference",
-        "Die Bank verlangt für {0} eine TAN-Eingabe. Bitte ein Push-/App-Verfahren (z. B. SecureGo plus) verwenden oder „Tage beim ersten Abruf“ auf höchstens 90 setzen." => {
-            "The bank requires a TAN for {0}. Use a push/app method (e.g. SecureGo plus) or set “Days on first sync” to 90 or less."
+        "Die Bank verlangt für {0} eine TAN-Eingabe, die während des Abrufs nicht möglich ist. Bitte ein App-Verfahren der Bank (Freigabe in der Banking-App) verwenden." => {
+            "The bank requires a TAN for {0}, which can’t be entered during a sync. Please use one of the bank’s app methods (approval in the banking app)."
+        }
+        "Umsätze der letzten 90 Tage gibt die Bank meist ohne TAN heraus. Bei einem neuen Konto lässt sich der Zeitraum beim ersten Abruf in den Einstellungen auf 90 Tage stellen." => {
+            "Banks usually hand out the last 90 days of bookings without a TAN. For a new account, the period of the first fetch can be set to 90 days in Settings."
         }
         "Kontenliste (HKSPA) – {0}" => "Account list (HKSPA) – {0}",
         "Kontoauszug {0}" => "Statement {0}",

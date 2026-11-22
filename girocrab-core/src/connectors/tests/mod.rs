@@ -162,6 +162,7 @@ fn fetch_warnings_name_accounts_by_their_stored_name() {
     };
     let s = store_fetch(&v, ConnectorKind::FinTsGeneric, conn, first).unwrap();
     assert!(s.warnings.is_empty());
+    assert!(s.hints.is_empty());
     let id = v.list_accounts().unwrap().pop().unwrap().id;
     v.rename_account(id, "Cash".into()).unwrap();
 
@@ -172,9 +173,11 @@ fn fetch_warnings_name_accounts_by_their_stored_name() {
             format!("{iban}: Umsätze (HKCAZ/camt.052) – TAN verlangt"),
             "Kontenliste (HKSPA) – abgelehnt".into(),
         ],
+        hints: vec!["Zeitraum auf 90 Tage stellen".into()],
         ..Default::default()
     };
     let s = store_fetch(&v, ConnectorKind::FinTsGeneric, conn, failed).unwrap();
+    assert_eq!(s.hints, vec!["Zeitraum auf 90 Tage stellen".to_string()]);
     assert_eq!(
         s.warnings,
         vec![
