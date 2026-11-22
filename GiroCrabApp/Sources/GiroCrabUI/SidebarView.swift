@@ -766,61 +766,80 @@ struct AccountRow: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// What a row shows below the name: one source for both layouts.
+    private enum SecondLine {
+        case archived(Date)
+        case loan(Double)
+        case subtitle(String)
+    }
+
+    private var secondLine: SecondLine {
+        if let date = account.archivedDate { return .archived(date) }
+        if let repaid { return .loan(repaid) }
+        return .subtitle(searchAwareSubtitle)
+    }
+
     /// Name, owner initials, count and balance in one line, bank below (#884).
     /// The name truncates first; count and balance keep their width.
     private var spaciousRow: some View {
-        HStack(spacing: 9) {
+        let line2 = secondLine
+        return HStack(spacing: 9) {
             // tinted like the account's marker in the booking list
             AccountSignet(account: account, size: 24, color: model.accountColor(account.id), onSelection: onSelection)
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 4) {
-                    Text(account.name).appFont(.body, weight: .medium).lineLimit(1).truncationMode(.tail).sensitive()
-                        .help(redaction.masking(account.owner))
-                    if showsInitials {
-                        Text(verbatim: SidebarDensity.initials(of: account.owner))
-                            .appFont(.caption2, weight: .semibold)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 4)
-                            .background(.secondary.opacity(0.15), in: Capsule())
-                            .fixedSize()
-                            .sensitive()
+            // name and balance share the first line: aligned on its baseline, not centred on the row
+            HStack(alignment: .firstTextBaseline, spacing: 9) {
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 4) {
+                        Text(account.name).appFont(.body, weight: .medium).lineLimit(1).truncationMode(.tail).sensitive()
+                            .help(redaction.masking(account.owner))
+                        if showsInitials(line2) {
+                            Text(verbatim: SidebarDensity.initials(of: account.owner))
+                                .appFont(.caption2, weight: .semibold)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 4)
+                                .background(.secondary.opacity(0.15), in: Capsule())
+                                .fixedSize()
+                                .sensitive()
+                        }
+                        revokedIcon
+                        NewCountBadge(count: Int(account.newCount), onSelection: onSelection)
+                            .layoutPriority(1)
+                        // in the name line, centred on it like in the compact row
+                        if syncing {
+                            ProgressView().controlSize(.mini)
+                                .accessibilityLabel(Text("Wird synchronisiert"))
+                        }
+                        exclusionIndicator
                     }
-                    revokedIcon
-                    NewCountBadge(count: Int(account.newCount), onSelection: onSelection)
-                        .layoutPriority(1)
-                }
-                if let date = account.archivedDate {
-                    archivedLabel(date)
-                } else if let repaid {
-                    ProgressView(value: repaid)
-                        .progressViewStyle(.linear)
-                        .tint(Theme.loan.opacity(0.7))
-                        .controlSize(.mini)
-                        .frame(maxWidth: 110)
-                        .sensitive(.amounts)
-                        .help(redaction.masking(repaidText(repaid), .amounts))
-                } else {
-                    subtitle
-                }
-            }
-            Spacer(minLength: 4)
-            if syncing {
-                ProgressView().controlSize(.mini)
-                    .accessibilityLabel(Text("Wird synchronisiert"))
-            }
-            exclusionIndicator
-            // archived accounts show no balance (#667), nor how far a loan was repaid
-            if !account.isArchived {
-                VStack(alignment: .trailing, spacing: 1) {
-                    balance
-                    if let repaid {
-                        Text(repaidText(repaid))
+                    switch line2 {
+                    case .archived(let date):
+                        archivedLabel(date)
+                    case .loan(let repaid):
+                        ProgressView(value: repaid)
+                            .progressViewStyle(.linear)
+                            .tint(Theme.loan.opacity(0.7))
+                            .controlSize(.mini)
+                            .frame(maxWidth: 110)
                             .sensitive(.amounts)
-                            .appFont(.caption2).foregroundStyle(.secondary)
-                            .fixedSize()
+                            .help(redaction.masking(repaidText(repaid), .amounts))
+                    case .subtitle(let text):
+                        subtitle(text)
                     }
                 }
-                .layoutPriority(1)
+                Spacer(minLength: 4)
+                // archived accounts show no balance (#667), nor how far a loan was repaid
+                if !account.isArchived {
+                    VStack(alignment: .trailing, spacing: 1) {
+                        balance
+                        if let repaid {
+                            Text(repaidText(repaid))
+                                .sensitive(.amounts)
+                                .appFont(.caption2).foregroundStyle(.secondary)
+                                .fixedSize()
+                        }
+                    }
+                    .layoutPriority(1)
+                }
             }
         }
     }
@@ -848,7 +867,10 @@ struct AccountRow: View {
                 }
                 // row 2: bank / loan progress left, balance right
                 HStack(spacing: 6) {
-                    if let repaid {
+                    switch secondLine {
+                    case .archived(let date):
+                        archivedLabel(date)
+                    case .loan(let repaid):
                         let bar = ProgressView(value: repaid)
                             .progressViewStyle(.linear)
                             .tint(Theme.loan.opacity(0.7))
@@ -867,10 +889,8 @@ struct AccountRow: View {
                             }
                             bar
                         }
-                    } else if let date = account.archivedDate {
-                        archivedLabel(date)
-                    } else {
-                        subtitle
+                    case .subtitle(let text):
+                        subtitle(text)
                     }
                     Spacer(minLength: 4)
                     // archived accounts show no balance (#667)
@@ -915,11 +935,10 @@ struct AccountRow: View {
 
     /// Bank, note or search hit below the name. Only the plain bank name stays
     /// visible in reports: owner / IBAN hits and the user's own bank label are personal.
-    private var subtitle: some View {
-        let text = searchAwareSubtitle
-        return Text(text)
+    private func subtitle(_ text: String) -> some View {
+        Text(text)
             .sensitive(text == account.bankName && account.bankLabel == nil ? [] : .personal)
-            .appFont(.caption2, design: ibanSubtitle ? .monospaced : .default)
+            .appFont(.caption2, design: model.isSidebarAccountSearching && text == formatIBAN(account.iban) ? .monospaced : .default)
             .foregroundStyle(.secondary)
             .lineLimit(1)
     }
@@ -932,10 +951,15 @@ struct AccountRow: View {
             .foregroundStyle(onSelection ? AnyShapeStyle(.primary) : AnyShapeStyle(account.kind == .loan ? Theme.loan : (account.balanceCents < 0 ? Theme.negative : Theme.text)))
     }
 
-    /// The initials chip, unless the subtitle already names the owner
-    /// (accounts of the same name, or an owner hit while searching).
-    private var showsInitials: Bool {
-        !account.owner.isEmpty && model.accountDistinction(account).isEmpty && searchAwareSubtitle != account.owner
+    /// The initials chip, unless the subtitle the row shows already names the owner
+    /// (accounts of the same name told apart by owner, or an owner hit while searching).
+    /// Archived accounts and loans show a date or the repayment bar there, so they keep it.
+    private func showsInitials(_ line2: SecondLine) -> Bool {
+        guard !SidebarDensity.initials(of: account.owner).isEmpty else { return false }
+        guard case .subtitle(let text) = line2 else { return true }
+        if text == account.owner { return false } // owner hit while searching
+        // same-named accounts told apart by owner: the distinction is the owner itself
+        return !(model.accountDistinction(account) == account.owner && text.contains(account.owner))
     }
 
     /// While searching, prefer Kontoinhaber or IBAN so the hit is obvious.
@@ -962,10 +986,6 @@ struct AccountRow: View {
             return account.iban.isEmpty ? account.accountNumber : formatIBAN(account.iban)
         }
         return baseSubtitle
-    }
-
-    private var ibanSubtitle: Bool {
-        model.isSidebarAccountSearching && searchAwareSubtitle == formatIBAN(account.iban)
     }
 }
 
