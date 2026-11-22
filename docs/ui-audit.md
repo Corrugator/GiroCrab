@@ -65,7 +65,14 @@ $APP --demo-seed --pick rewe --screenshot /tmp/audit-narrow.png --window-width 9
 ```
 
 `--pick <Text>` wählt die erste Buchung, deren Händler oder Gegenpartei den Text enthält; `--select <Konto>`
-wählt ein Konto. iOS: im Simulator mit denselben Argumenten (Scheme › Run › Arguments).
+wählt ein Konto. `--screenshot` gibt es nur auf macOS. iOS: App im gestarteten Simulator mit Demo-Daten
+starten und das Bild mit `simctl` aufnehmen (wie `scripts/verify_ui.sh`):
+
+```bash
+SIMCTL_CHILD_GIROCRAB_DEMO_SEED=1 xcrun simctl launch booted de.girocrab.app --pick rewe
+xcrun simctl io booted screenshot /tmp/audit-ios.png
+```
+
 Screenshots gehören in den PR oder das Issue, nicht ins Repository.
 
 ## Mit Impeccable
