@@ -27245,6 +27245,17 @@
         }
       }
     },
+    "Rente" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pension"
+          }
+        }
+      }
+    },
     "Reparatur" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -30987,6 +30998,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Scope"
+          }
+        }
+      }
+    },
+    "Umlagen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service charges"
           }
         }
       }
