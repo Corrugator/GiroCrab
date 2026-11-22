@@ -48,6 +48,8 @@ pub enum ConnectorKind {
     VolkswagenBank,
     /// Uberspace hosting accounts (balance and bookings per Asteroid) via the web dashboard.
     Uberspace,
+    /// A wallet in the user's own Bitcoin Core node, over its local JSON-RPC interface.
+    BitcoinCore,
     /// Advanzia credit card via an authenticated WebKit session.
     Advanzia,
     /// Bausparkasse Schwäbisch Hall (Bausparverträge, postbox PDFs) via the
@@ -102,6 +104,7 @@ impl ConnectorKind {
             ConnectorKind::AlteLeipziger => "fin4u",
             ConnectorKind::VolkswagenBank => "volkswagenbank",
             ConnectorKind::Uberspace => "uberspace",
+            ConnectorKind::BitcoinCore => "bitcoincore",
             ConnectorKind::Advanzia => "advanzia",
             ConnectorKind::SchwaebischHall => "schwaebischhall",
             ConnectorKind::EquatePlus => "equateplus",
@@ -167,6 +170,7 @@ impl ConnectorKind {
             ConnectorKind::AlteLeipziger,
             ConnectorKind::VolkswagenBank,
             ConnectorKind::Uberspace,
+            ConnectorKind::BitcoinCore,
             ConnectorKind::Advanzia,
             ConnectorKind::SchwaebischHall,
             ConnectorKind::EquatePlus,

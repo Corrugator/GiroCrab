@@ -197,6 +197,11 @@ fn own_api() -> Vec<(ConnectorKind, &'static str, &'static str)> {
             "ffb fil fondsbank fidelity fondsdepot fonds vl sparplan",
         ),
         (
+            ConnectorKind::BitcoinCore,
+            "Bitcoin Core",
+            "bitcoin btc bitcoin core knoten node wallet krypto crypto",
+        ),
+        (
             ConnectorKind::Monefit,
             "Monefit SmartSaver",
             "monefit smartsaver creditstar sparkonto tagesgeld",

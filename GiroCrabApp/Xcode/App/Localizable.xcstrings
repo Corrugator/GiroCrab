@@ -569,6 +569,17 @@
         }
       }
     },
+    "%@: wird per iCloud-Sync vom Mac mit Bitcoin Core aktualisiert." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: updated via iCloud sync from the Mac running Bitcoin Core."
+          }
+        }
+      }
+    },
     "%@: Ø %@, Ende %@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -873,6 +884,107 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld documents could not be assigned to an account."
+          }
+        }
+      }
+    },
+    "%lld Dokumente neu einsortiert · %lld Buchungen verknüpft" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@docs@ · %#@links@"
+          },
+          "substitutions" : {
+            "docs" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg Dokument neu einsortiert"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg Dokumente neu einsortiert"
+                    }
+                  }
+                }
+              }
+            },
+            "links" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg Buchung verknüpft"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg Buchungen verknüpft"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@docs@ · %#@links@"
+          },
+          "substitutions" : {
+            "docs" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg document refiled"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg documents refiled"
+                    }
+                  }
+                }
+              }
+            },
+            "links" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg booking linked"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg bookings linked"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -5605,6 +5717,17 @@
         }
       }
     },
+    "Aus einem Link übernommen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Taken from a link"
+          }
+        }
+      }
+    },
     "Aus: Das Konto wird archiviert und ausgeblendet, seine Daten bleiben erhalten." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7976,6 +8099,61 @@
         }
       }
     },
+    "Bitcoin Core (eigener Knoten)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bitcoin Core (own node)"
+          }
+        }
+      }
+    },
+    "Bitcoin Core nicht erreichbar" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bitcoin Core not reachable"
+          }
+        }
+      }
+    },
+    "Bitcoin Core nicht hinzugefügt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bitcoin Core not added"
+          }
+        }
+      }
+    },
+    "Bitcoin-Core-Datenverzeichnis" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bitcoin Core data directory"
+          }
+        }
+      }
+    },
+    "Bitcoin-Core-RPC-Adresse" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bitcoin Core RPC address"
+          }
+        }
+      }
+    },
     "Bitte Empfänger und IBAN genau prüfen. Die Bank bestätigt den Auftrag mit einer TAN." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8966,6 +9144,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cash by account"
+          }
+        }
+      }
+    },
+    "Cash nach Kontoart" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cash by account type"
           }
         }
       }
@@ -10225,6 +10414,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The balance at the start of the date, e.g. from the oldest statement you have. Bookings from that date on are added, older ones are not. Without a date, all bookings count."
+          }
+        }
+      }
+    },
+    "Der Link enthält keine IBAN." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The link contains no IBAN."
+          }
+        }
+      }
+    },
+    "Der Link verlangt eine Zahlung in %@. Überweisungen sind nur in Euro möglich." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The link asks for a payment in %@. Transfers are only possible in euros."
           }
         }
       }
@@ -12032,6 +12243,28 @@
         }
       }
     },
+    "Dokumente neu einsortieren …" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refile documents…"
+          }
+        }
+      }
+    },
+    "Dokumente neu einsortieren?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refile documents?"
+          }
+        }
+      }
+    },
     "Dokumente werden unter „Belege & Postbox“ abgelegt (Suche: equateplus) und nicht automatisch Umsätzen oder Aktivitäten zugeordnet. Nur wenn der Programmname im Dokument zu einem Programm passt, steht es auch bei dessen Konto." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13408,6 +13641,17 @@
         }
       }
     },
+    "Empfänger, IBAN und Betrag stammen aus einer anderen App oder Webseite. Bitte mit der Rechnung vergleichen, bevor Sie die Überweisung freigeben." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recipient, IBAN and amount come from another app or website. Please compare them with the invoice before you approve the transfer."
+          }
+        }
+      }
+    },
     "Empfänger-IBAN" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13965,6 +14209,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "There is nothing new from the GiroCrab project right now."
+          }
+        }
+      }
+    },
+    "Es gibt kein Girokonto mit IBAN, von dem aus überwiesen werden kann." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There is no checking account with an IBAN to transfer from."
           }
         }
       }
@@ -15856,6 +16111,17 @@
         }
       }
     },
+    "GiroCrab kann mit diesem Link nichts anfangen." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GiroCrab can't handle this link."
+          }
+        }
+      }
+    },
     "GiroCrab konnte nicht prüfen, ob diese Version noch sicher mit Banken kommunizieren darf. Bitte später erneut versuchen oder in Firewall bzw. Little Snitch Verbindungen zu raw.githubusercontent.com erlauben." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -15916,6 +16182,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "GiroCrab uses the existing session or signs in using your saved credentials. You confirm any required approval yourself."
+          }
+        }
+      }
+    },
+    "GiroCrab prüft die vorhandenen Belege dieses Bankzugangs erneut. Dabei können sich Dokumenttypen und manuell gewählte Ablagekonten ändern. Bestehende Buchungsverknüpfungen bleiben erhalten. Offene Belege können eine neue Verknüpfung erhalten, auch wenn Sie diese zuvor gelöst haben." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GiroCrab checks the existing documents for this bank connection again. Document types and manually chosen filing accounts may change. Existing booking links are preserved. Unlinked documents may be linked again, including links you previously removed."
           }
         }
       }
@@ -16114,6 +16391,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Unlock the GiroCrab vault"
+          }
+        }
+      }
+    },
+    "Girokonten" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking accounts"
           }
         }
       }
@@ -21356,6 +21644,17 @@
         }
       }
     },
+    "Link nicht übernommen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link not applied"
+          }
+        }
+      }
+    },
     "Liquidität & Geldmarkt" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -22937,6 +23236,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Retake"
+          }
+        }
+      }
+    },
+    "Neu einsortieren" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refile"
           }
         }
       }
@@ -26469,6 +26779,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Create Rule for “%@”"
+          }
+        }
+      }
+    },
+    "Regel gespeichert – geänderte Buchungen: %u" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rule saved. Transactions changed: %u"
+          }
+        }
+      }
+    },
+    "Regel gespeichert – keine Buchungen geändert" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rule saved. No transactions changed."
+          }
+        }
+      }
+    },
+    "Regel gespeichert, Anwenden fehlgeschlagen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rule Saved but Couldn’t Be Applied"
           }
         }
       }
@@ -30155,6 +30498,17 @@
         }
       }
     },
+    "Tresor oder Einstellungen haben sich während der Prüfung geändert. Bitte füge Bitcoin Core noch einmal hinzu." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The vault or settings changed during the check. Please add Bitcoin Core again."
+          }
+        }
+      }
+    },
     "Tresor sichern" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -33116,6 +33470,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Payment service"
+          }
+        }
+      }
+    },
+    "Zahlungsdienste" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Payment services"
           }
         }
       }

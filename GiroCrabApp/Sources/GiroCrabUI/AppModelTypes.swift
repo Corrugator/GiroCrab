@@ -496,6 +496,9 @@ struct TransferDraft {
     /// Terminüberweisung: when on, `executionDate` is sent (FinTS only).
     var scheduled = false
     var executionDate = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+    /// Filled from a `girocrab://transfer` link (`PaymentLink`): the form warns that another
+    /// app or a web page chose the recipient. A new draft starts without it.
+    var fromLink = false
 
     /// The fields a payment fills (paste, invoice, clipboard check #663).
     static let paymentFields: [WritableKeyPath<TransferDraft, String>] = [\.name, \.iban, \.bic, \.amountText, \.purpose]
@@ -636,6 +639,8 @@ let settingLabels: [String: String] = [
     "paypal.client_id": String(localized: "PayPal Client-ID"),
     "paypal.client_secret": String(localized: "PayPal Secret"),
     "kontist.client_id": String(localized: "Kontist Client-ID"),
+    "bitcoin_core.datadir": String(localized: "Bitcoin-Core-Datenverzeichnis"),
+    "bitcoin_core.rpc_url": String(localized: "Bitcoin-Core-RPC-Adresse"),
     "kontist.client_secret": String(localized: "Kontist Client-Secret"),
     "enablebanking.application_id": String(localized: "Enable Banking Application-ID"),
     "enablebanking.private_key_pem": String(localized: "Enable Banking Private Key"),
