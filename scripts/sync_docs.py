@@ -113,7 +113,6 @@ CONNECTOR_DOCS = {
     "bitcoin-core": ("Bitcoin Core", "Bitcoin Core"),
     "kontist": ("Kontist", "Kontist"),
     "monefit": ("Monefit SmartSaver", "Monefit"),
-    "goandgrow": ("Go & Grow", "Go & Grow"),
     "schwaebisch-hall": ("Schwäbisch Hall (Bausparen)", "Schwäbisch Hall"),
 }
 

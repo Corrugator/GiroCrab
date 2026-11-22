@@ -1,4 +1,4 @@
-//! Local test of the Monefit SmartSaver and Go & Grow connectors, without the
+//! Local test of the Monefit SmartSaver connector, without the
 //! app and without a vault. Prints the balance and the bookings to stdout
 //! (your own data, nothing is stored or sent anywhere but to the provider).
 //!
@@ -6,11 +6,10 @@
 //! read -s SAVINGS_PASSWORD
 //! export SAVINGS_PASSWORD
 //! CONNECTOR=monefit SAVINGS_LOGIN='erika@example.org' SINCE=2026-01-01 \
-//!   cargo run -q -p girocrab-core --example savings_web
+//!   cargo run -q -p girocrab-core --example monefit_web
 //! ```
 //!
-//! `CONNECTOR=goandgrow` tests Go & Grow; without `SINCE` the last 30 days are fetched.
-use girocrab_core::connectors::goandgrow::GoAndGrowConnector;
+//! Without `SINCE` the last 30 days are fetched.
 use girocrab_core::connectors::monefit::MonefitConnector;
 use girocrab_core::connectors::{BankConnector, ConnectContext, Phase};
 use girocrab_core::money::format_cents;
@@ -27,9 +26,8 @@ fn env(key: &str) -> String {
 async fn main() {
     let mut c: Box<dyn BankConnector> = match env("CONNECTOR").as_str() {
         "monefit" => Box::new(MonefitConnector::new()),
-        "goandgrow" => Box::new(GoAndGrowConnector::new()),
         other => {
-            eprintln!("CONNECTOR={other}: erwartet monefit oder goandgrow");
+            eprintln!("CONNECTOR={other}: erwartet monefit");
             std::process::exit(2)
         }
     };

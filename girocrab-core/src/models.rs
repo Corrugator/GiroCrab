@@ -77,9 +77,6 @@ pub enum ConnectorKind {
     HanseaticBank,
     /// Monefit SmartSaver savings account via the web app's JSON API (unofficial).
     Monefit,
-    /// Go & Grow (formerly Bondora Go & Grow) via the investor web app's JSON API
-    /// behind its Keycloak login (unofficial).
-    GoAndGrow,
 }
 
 impl ConnectorKind {
@@ -116,7 +113,6 @@ impl ConnectorKind {
             ConnectorKind::Kontist => "kontist",
             ConnectorKind::HanseaticBank => "hanseatic",
             ConnectorKind::Monefit => "monefit",
-            ConnectorKind::GoAndGrow => "goandgrow",
         }
     }
     pub fn from_str(s: &str) -> Option<Self> {
@@ -182,7 +178,6 @@ impl ConnectorKind {
             ConnectorKind::Finpension,
             ConnectorKind::Kontist,
             ConnectorKind::Monefit,
-            ConnectorKind::GoAndGrow,
         ]
     }
 }
