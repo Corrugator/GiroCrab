@@ -5551,6 +5551,17 @@
         }
       }
     },
+    "Auf welche Buchungen soll die Regel angewendet werden?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Which transactions should this rule apply to?"
+          }
+        }
+      }
+    },
     "Aufgenommen wird das Hauptfenster samt geöffnetem Dialog. Liegt das Problem woanders, wechsle dort zur betroffenen Ansicht oder öffne den Dialog und wähle dann „Neu aufnehmen“. Eine neue Aufnahme verwirft die Markierungen, weil sich der Inhalt verschoben haben kann." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7026,6 +7037,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Submit to Bank"
+          }
+        }
+      }
+    },
+    "Bei „Alle Buchungen“ kann die Regel auch manuell gesetzte Kategorien überschreiben." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All Transactions lets the rule overwrite manually assigned categories as well."
           }
         }
       }
@@ -21918,6 +21940,17 @@
         }
       }
     },
+    "Manuell kategorisiert" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manually categorized"
+          }
+        }
+      }
+    },
     "Manuell markiert" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -24956,6 +24989,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Unread only"
+          }
+        }
+      }
+    },
+    "Nur unkategorisierte Buchungen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only Uncategorized Transactions"
           }
         }
       }
