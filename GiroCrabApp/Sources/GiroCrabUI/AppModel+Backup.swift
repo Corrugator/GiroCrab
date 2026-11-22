@@ -46,13 +46,13 @@ extension AppModel {
         // also from the demo an empty vault shows on a new device
         useVault(v, demo: false)
         // The restored state wins in the merge (#1090) and goes to the other
-        // devices with the next sync; say so instead of syncing silently. A sync
-        // still running would drop this one (`isSyncing` guard): wait for it.
+        // devices with the next sync; say so instead of syncing silently, but
+        // only once that sync has started (it waits for one still running).
+        toast = String(localized: "Tresor aus der Sicherung wiederhergestellt")
         Task {
-            await CloudSyncManager.shared.waitUntilIdle()
-            toast = syncNow()
-                ? String(localized: "Tresor aus der Sicherung wiederhergestellt. Der Stand wird mit Ihren anderen Geräten abgeglichen; das Ergebnis sehen Sie unter Einstellungen › iCloud Sync.")
-                : String(localized: "Tresor aus der Sicherung wiederhergestellt")
+            await syncRestoredVault { [weak self] in
+                self?.toast = String(localized: "Tresor aus der Sicherung wiederhergestellt. Der Stand wird mit Ihren anderen Geräten abgeglichen; das Ergebnis sehen Sie unter Einstellungen › iCloud Sync.")
+            }
         }
         return true
     }

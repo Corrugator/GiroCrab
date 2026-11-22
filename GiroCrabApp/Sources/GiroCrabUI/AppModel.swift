@@ -1619,8 +1619,23 @@ public final class AppModel {
         }
     }
 
-    private func performSyncOrAutoAdopt(vault v: Vault) async {
-        await CloudSyncManager.shared.sync(vault: v)
+    /// After a restore (#1090): waits for a running sync, then syncs the restored
+    /// vault (`CloudSyncManager.syncWhenIdle`). `onStart` runs once that sync has
+    /// started; false (and no `onStart`) when iCloud Sync is off or it did not run.
+    @discardableResult
+    func syncRestoredVault(onStart: @escaping @MainActor () -> Void) async -> Bool {
+        guard let v = ownVault, CloudSyncManager.shared.isEnabled else { return false }
+        return await performSyncOrAutoAdopt(vault: v, whenIdle: onStart)
+    }
+
+    @discardableResult
+    private func performSyncOrAutoAdopt(vault v: Vault, whenIdle onStart: (@MainActor () -> Void)? = nil) async -> Bool {
+        let ran: Bool
+        if let onStart {
+            ran = await CloudSyncManager.shared.syncWhenIdle(vault: v, onStart: onStart)
+        } else {
+            ran = await CloudSyncManager.shared.sync(vault: v)
+        }
         CloudSyncManager.shared.startAutoSync(vault: v) { [weak self] in self?.reloadAllInBackground() }
         if CloudSyncManager.shared.legacyFolderWritten {
             self.toast = String(localized: "Ein anderes Gerät nutzt noch eine ältere GiroCrab-Version und schreibt in den alten Ordner. Bitte alle Geräte aktualisieren.")
@@ -1634,6 +1649,7 @@ public final class AppModel {
         } else {
             self.reloadAll()
         }
+        return ran
     }
 
     func connectionsExist(_ v: Vault) -> Bool {

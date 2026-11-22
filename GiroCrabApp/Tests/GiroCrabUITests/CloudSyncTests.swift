@@ -374,6 +374,40 @@ final class CloudSyncTests: XCTestCase {
         XCTAssertEqual(own.count, 1, "the pending change was written after the poll")
     }
 
+    /// #1090: the sync after a restore waits for a running one, and another sync
+    /// started while it waits never makes it drop out (`isSyncing` guard): it
+    /// runs last and reports its start only then.
+    @MainActor
+    func test_restore_sync_runs_after_a_sync_started_while_it_waits() async throws {
+        let folder = try tempDir()
+        let peer = try device(folder, seeded: true)
+        XCTAssertTrue(try peer.1.write(vault: peer.0).wrote)
+        let (v, _) = try device(folder, seeded: true)
+        let sync = CloudSyncManager.shared
+        sync.setFolderForTesting(folder)
+        defer { sync.setFolderForTesting(nil); sync.stopAutoSync() }
+        sync.prepareAutoSyncForTesting(vault: v)
+        let started = StartLog()
+        let polling = Task { await sync.runForTesting(write: false, poll: true) }
+        for _ in 0..<1000 where !sync.isAutoBusy { await Task.yield() }
+        XCTAssertTrue(sync.isAutoBusy, "the poll should be running")
+        let restore = Task { await sync.syncWhenIdle(vault: v) { started.names.append("restore") } }
+        await Task.yield()
+        XCTAssertTrue(started.names.isEmpty, "the restore sync waits for the poll")
+        // another manual sync starts between the wait and the restore sync
+        let other = Task { await sync.sync(vault: v) { started.names.append("other") } }
+        let otherRan = await other.value
+        let restoreRan = await restore.value
+        await polling.value
+        XCTAssertTrue(otherRan)
+        XCTAssertTrue(restoreRan, "the restore sync must not be dropped")
+        XCTAssertEqual(started.names, ["other", "restore"])
+        XCTAssertFalse(sync.isSyncing)
+    }
+
+    @MainActor
+    private final class StartLog { var names: [String] = [] }
+
     // MARK: where to sync
 
     private let container = URL(fileURLWithPath: "/c/Documents")
