@@ -8981,6 +8981,17 @@
         }
       }
     },
+    "Cash nach Kontoart" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cash by account type"
+          }
+        }
+      }
+    },
     "Cash-Verlauf" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -16180,6 +16191,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Unlock the GiroCrab vault"
+          }
+        }
+      }
+    },
+    "Girokonten" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking accounts"
           }
         }
       }
@@ -33193,6 +33215,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Payment service"
+          }
+        }
+      }
+    },
+    "Zahlungsdienste" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Payment services"
           }
         }
       }
