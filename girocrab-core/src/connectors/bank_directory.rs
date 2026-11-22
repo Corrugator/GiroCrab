@@ -197,6 +197,16 @@ fn own_api() -> Vec<(ConnectorKind, &'static str, &'static str)> {
             "ffb fil fondsbank fidelity fondsdepot fonds vl sparplan",
         ),
         (
+            ConnectorKind::Monefit,
+            "Monefit SmartSaver",
+            "monefit smartsaver creditstar sparkonto tagesgeld",
+        ),
+        (
+            ConnectorKind::GoAndGrow,
+            "Go & Grow",
+            "go and grow goandgrow bondora sparkonto tagesgeld",
+        ),
+        (
             ConnectorKind::Uberspace,
             "Uberspace",
             "uberspace hosting asteroid webhosting",

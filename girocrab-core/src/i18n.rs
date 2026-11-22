@@ -1154,6 +1154,62 @@ fn english(de: &str) -> Option<&'static str> {
         "Volkswagen Bank: Unerwartete Antwort auf die TAN-Abfrage." => {
             "Volkswagen Bank: unexpected answer to the TAN request."
         }
+        // ------------------------------------------------------------ connectors/monefit.rs, goandgrow.rs
+        "Monefit: Unerwartete Antwort der API (HTTP {0})." => {
+            "Monefit: Unexpected API response (HTTP {0})."
+        }
+        "Monefit: Sitzung abgelaufen. Bitte erneut abrufen." => {
+            "Monefit: Session expired. Please sync again."
+        }
+        "Monefit: E-Mail-Adresse und Passwort erforderlich." => {
+            "Monefit: Email address and password required."
+        }
+        "Monefit: Der Anmeldedienst antwortet nicht (HTTP {0}). Bitte später erneut versuchen." => {
+            "Monefit: The login service is not responding (HTTP {0}). Please try again later."
+        }
+        "Monefit: Die Anmeldung verlangt einen zweiten Faktor; das wird noch nicht unterstützt." => {
+            "Monefit: The login requires a second factor, which is not supported yet."
+        }
+        "Monefit: Anmeldung fehlgeschlagen. Bitte E-Mail-Adresse und Passwort prüfen." => {
+            "Monefit: Login failed. Please check email address and password."
+        }
+        "Monefit: Unvollständige Buchung in der Antwort. Es wurden keine Daten übernommen." => {
+            "Monefit: Incomplete booking in the response. No data was taken over."
+        }
+        "Monefit: Die Umsatzliste wurde nicht vollständig geliefert. Bitte den Abruf erneut starten." => {
+            "Monefit: The list of bookings was not delivered completely. Please start the sync again."
+        }
+        "Monefit SmartSaver: Saldo und alle Umsätze des Sparkontos. Inoffiziell: nutzt die Schnittstelle der Web-App, Änderungen sind möglich. Eine Anmeldung mit zweitem Faktor wird noch nicht unterstützt." => {
+            "Monefit SmartSaver: balance and all bookings of the savings account. Unofficial: uses the web app's interface, changes are possible. A login with a second factor is not supported yet."
+        }
+        "Go & Grow: Anmeldeseite nicht erkannt (Seite geändert?)." => {
+            "Go & Grow: Login page not recognised (page changed?)."
+        }
+        "Go & Grow: Anmeldung fehlgeschlagen. Bitte E-Mail-Adresse und Passwort prüfen." => {
+            "Go & Grow: Login failed. Please check email address and password."
+        }
+        "Go & Grow: Unerwartete Antwort der API (HTTP {0})." => {
+            "Go & Grow: Unexpected API response (HTTP {0})."
+        }
+        "Go & Grow: Weiterleitung zu einer unbekannten Adresse ({0}) abgebrochen." => {
+            "Go & Grow: Redirect to an unknown address ({0}) stopped."
+        }
+        "Go & Grow: Kein Konto in der Antwort gefunden." => {
+            "Go & Grow: No account found in the response."
+        }
+        "Go & Grow: Sitzung abgelaufen. Bitte erneut abrufen." => {
+            "Go & Grow: Session expired. Please sync again."
+        }
+        "Go & Grow: E-Mail-Adresse und Passwort erforderlich." => {
+            "Go & Grow: Email address and password required."
+        }
+        "Go & Grow: Unvollständige Buchung in der Antwort. Es wurden keine Daten übernommen." => {
+            "Go & Grow: Incomplete booking in the response. No data was taken over."
+        }
+        "Go & Grow (ehemals Bondora): Saldo und Umsätze. Die Schnittstelle liefert nur die letzten zehn Buchungen; ältere lassen sich nur per Import übernehmen. Darum mindestens alle zehn Tage abrufen. Inoffiziell: nutzt die Schnittstelle der Web-App, Änderungen sind möglich." => {
+            "Go & Grow (formerly Bondora): balance and bookings. The interface delivers only the latest ten bookings; older ones can only be added by an import. Sync at least every ten days for that reason. Unofficial: uses the web app's interface, changes are possible."
+        }
+        "Web-App (Direkt-Login)" => "Web app (direct login)",
         // ------------------------------------------------------------ connectors/kontist.rs
         "Kontist GraphQL-API (OAuth2 + Freigabe in der App)" => {
             "Kontist GraphQL API (OAuth2 + approval in the app)"

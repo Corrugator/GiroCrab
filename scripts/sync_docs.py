@@ -111,6 +111,8 @@ CONNECTOR_DOCS = {
     "volkswagen-bank": ("Volkswagen Bank", "Volkswagen Bank"),
     "uberspace": ("Uberspace", "Uberspace"),
     "kontist": ("Kontist", "Kontist"),
+    "monefit": ("Monefit SmartSaver", "Monefit"),
+    "goandgrow": ("Go & Grow", "Go & Grow"),
     "schwaebisch-hall": ("Schwäbisch Hall (Bausparen)", "Schwäbisch Hall"),
 }
 
