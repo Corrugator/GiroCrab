@@ -183,6 +183,28 @@ pub fn girocode_png_file_name(recipient: &str) -> String {
     }
 }
 
+/// Shown when an image export is refused while privacy applies (switch on or vault locked).
+pub const EXPORT_PRIVATE: &str =
+    "Im Privatmodus oder bei gesperrtem Tresor wird der GiroCode nicht exportiert.";
+
+/// Refuses the image export while privacy applies: clipboard history and files outlive the window.
+pub fn check_export_allowed(privacy: bool) -> Result<(), String> {
+    if privacy {
+        Err(EXPORT_PRIVATE.into())
+    } else {
+        Ok(())
+    }
+}
+
+/// Clipboard could not be opened (another program holds it). Never contains payment data.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub const CLIPBOARD_BUSY: &str = "Die Zwischenablage ist gerade belegt; bitte erneut versuchen.";
+
+/// Clipboard was opened but emptying or writing failed. Never contains payment data.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub const CLIPBOARD_WRITE_FAILED: &str =
+    "Das Bild konnte nicht in die Zwischenablage geschrieben werden.";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -350,5 +372,21 @@ mod tests {
         assert_eq!(&dib[40..44], &[255, 255, 255, 255]);
         assert_eq!(&dib[48..52], &[0, 0, 0, 255]);
         assert!(girocode_clipboard_images(&Fields::default()).is_err());
+    }
+
+    #[test]
+    fn export_is_refused_in_privacy_mode() {
+        assert_eq!(check_export_allowed(true), Err(EXPORT_PRIVATE.to_string()));
+        assert_eq!(check_export_allowed(false), Ok(()));
+        // A locked vault counts as privacy mode, even with the switch off.
+        assert!(check_export_allowed(crate::daily::effective_privacy(false, false)).is_err());
+        assert!(check_export_allowed(crate::daily::effective_privacy(false, true)).is_ok());
+    }
+
+    #[test]
+    fn clipboard_busy_only_for_contention() {
+        assert_ne!(CLIPBOARD_BUSY, CLIPBOARD_WRITE_FAILED);
+        assert!(CLIPBOARD_BUSY.contains("belegt"));
+        assert!(!CLIPBOARD_WRITE_FAILED.contains("belegt"));
     }
 }

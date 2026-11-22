@@ -1318,16 +1318,17 @@ fn save_png_file(name: &str) -> Option<PathBuf> {
 }
 
 /// Puts the image on the clipboard as registered "PNG" and as `CF_DIB`.
+/// "Busy" is reported only when opening fails; emptying/writing errors get their own text.
 #[cfg(windows)]
 fn copy_image_to_clipboard(png: &[u8], dib: &[u8]) -> Result<(), String> {
     use clipboard_win::{Clipboard, raw, register_format};
     const CF_DIB: u32 = 8;
-    let busy = |_| "Die Zwischenablage ist gerade belegt; bitte erneut versuchen.".to_string();
-    let _open = Clipboard::new_attempts(10).map_err(busy)?;
-    raw::empty().map_err(busy)?;
-    raw::set_without_clear(CF_DIB, dib).map_err(busy)?;
+    let _open = Clipboard::new_attempts(10).map_err(|_| girocode::CLIPBOARD_BUSY.to_string())?;
+    let write_failed = |_| girocode::CLIPBOARD_WRITE_FAILED.to_string();
+    raw::empty().map_err(write_failed)?;
+    raw::set_without_clear(CF_DIB, dib).map_err(write_failed)?;
     if let Some(format) = register_format("PNG") {
-        raw::set_without_clear(format.get(), png).map_err(busy)?;
+        raw::set_without_clear(format.get(), png).map_err(write_failed)?;
     }
     Ok(())
 }
@@ -2104,8 +2105,10 @@ fn main() -> Result<(), slint::PlatformError> {
         let weak = win.as_weak();
         win.on_transfer_girocode_copy(move || {
             let Some(win) = weak.upgrade() else { return };
-            // Status texts never contain the name, IBAN or amount.
-            let status = girocode::girocode_clipboard_images(&transfer_fields(&win))
+            // Status texts never contain the name, IBAN or amount. Privacy is checked before
+            // the fields are read.
+            let status = girocode::check_export_allowed(privacy_on(&win))
+                .and_then(|()| girocode::girocode_clipboard_images(&transfer_fields(&win)))
                 .and_then(|(png, dib)| copy_image_to_clipboard(&png, &dib))
                 .map(|()| "GiroCode als Bild in die Zwischenablage kopiert.".to_string())
                 .unwrap_or_else(|e| e);
@@ -2116,6 +2119,10 @@ fn main() -> Result<(), slint::PlatformError> {
         let weak = win.as_weak();
         win.on_transfer_girocode_save(move || {
             let Some(win) = weak.upgrade() else { return };
+            if let Err(e) = girocode::check_export_allowed(privacy_on(&win)) {
+                win.set_transfer_status(e.into());
+                return;
+            }
             let f = transfer_fields(&win);
             let png = match girocode::girocode_payload_for(&f)
                 .and_then(|p| girocode::girocode_png_bytes(&p, girocode::EXPORT_MODULE_PX))
