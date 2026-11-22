@@ -546,7 +546,7 @@ struct MainSplitView: View {
     private var inspectorSplitter: some View {
         ZStack {
             Color.clear.frame(width: 10)
-            Color(nsColor: .separatorColor).frame(width: 1).frame(maxHeight: .infinity)
+            Theme.systemSeparator.frame(width: 1).frame(maxHeight: .infinity)
         }
         .contentShape(Rectangle())
         .frame(width: 10)
