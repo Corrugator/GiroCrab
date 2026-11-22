@@ -724,7 +724,7 @@ pub const BANK_MATRIX: &[MatrixEntry] = &[
         interface: Interface::WebPortal,
         official: Some(false),
         capabilities: &[Capability::Transactions, Capability::Balances],
-        status: Status::Verified,
+        status: Status::TestingWanted,
         issues: &[],
     },
     MatrixEntry {

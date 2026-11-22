@@ -77,7 +77,8 @@ fn fee(v: &Value) -> Option<Decimal> {
 /// API's naming; only INTEREST, DEPOSIT and BONUS were seen in real data.
 fn classify(txn_type: &str) -> (i64, String) {
     match txn_type {
-        "WITHDRAWAL" | "WITHDRAW" | "PAYOUT" | "FEE" => (-1, tr("Auszahlung").into()),
+        "WITHDRAWAL" | "WITHDRAW" | "PAYOUT" => (-1, tr("Auszahlung").into()),
+        "FEE" => (-1, tr("Gebühr").into()),
         "INTEREST" => (1, tr("Zinsen").into()),
         "DEPOSIT" => (1, tr("Einzahlung").into()),
         "BONUS" => (1, tr("Bonus").into()),
@@ -125,6 +126,30 @@ fn parse_booking(t: &Value) -> Option<RemoteTransaction> {
         booking_text,
         ..Default::default()
     })
+}
+
+/// Bookings with the same id (same second, type, amount and fee) get `#1`,
+/// `#2` … in the order of their purpose, not of the answer: if the API lists
+/// them in another order, each keeps its number. The purpose is no part of
+/// the id itself, so a reworded description never turns into new bookings.
+fn number_identical(bookings: &mut [RemoteTransaction]) {
+    let mut order: Vec<usize> = (0..bookings.len()).collect();
+    order.sort_by(|&a, &b| {
+        (&bookings[a].external_id, &bookings[a].purpose)
+            .cmp(&(&bookings[b].external_id, &bookings[b].purpose))
+    });
+    let mut previous: Option<String> = None;
+    let mut n = 0;
+    for i in order {
+        let base = bookings[i].external_id.clone();
+        if previous.as_deref() == Some(base.as_str()) {
+            n += 1;
+            bookings[i].external_id = format!("{base}#{n}");
+        } else {
+            n = 0;
+            previous = Some(base);
+        }
+    }
 }
 
 // ------------------------------------------------------------------ connector
@@ -222,7 +247,6 @@ impl BankConnector for MonefitConnector {
 
         let since = ctx.since_for(ACCOUNT_REF).to_string();
         let mut out = FetchResult::default();
-        let mut seen = std::collections::HashMap::new();
         'pages: for page in 1..=MAX_PAGES {
             let v = self
                 .get(&format!("/account/list?page={page}&perPage={PAGE_SIZE}"))
@@ -231,7 +255,7 @@ impl BankConnector for MonefitConnector {
                 return Err(unexpected(200));
             };
             for t in &items {
-                let Some(mut b) = parse_booking(t) else {
+                let Some(b) = parse_booking(t) else {
                     return Err(CoreError::invalid(tr(
                         "Monefit: Unvollständige Buchung in der Antwort. Es wurden keine Daten übernommen.",
                     )));
@@ -240,11 +264,6 @@ impl BankConnector for MonefitConnector {
                 if b.booking_date.as_str() < since.as_str() {
                     break 'pages;
                 }
-                let n = seen.entry(b.external_id.clone()).or_insert(0u32);
-                if *n > 0 {
-                    b.external_id = format!("{}#{n}", b.external_id);
-                }
-                *n += 1;
                 out.transactions.push(b);
             }
             if items.len() < PAGE_SIZE {
@@ -256,6 +275,7 @@ impl BankConnector for MonefitConnector {
                 )));
             }
         }
+        number_identical(&mut out.transactions);
         out.accounts.push(RemoteAccount {
             external_ref: ACCOUNT_REF.into(),
             name: "Monefit SmartSaver".into(),
@@ -360,6 +380,50 @@ mod tests {
             "monefit:2026-10-01 10:00:00|WITHDRAWAL|100|1.5"
         );
         assert_ne!(a.external_id, b.external_id);
+    }
+
+    #[test]
+    fn identical_ids_are_numbered_by_purpose_not_by_answer_order() {
+        let b = |purpose: &str| {
+            let mut t = parse_booking(&entry(
+                "2026-10-01 10:00:00",
+                "BONUS",
+                "5",
+                "0",
+                Some(purpose),
+            ))
+            .unwrap();
+            t.purpose = purpose.into();
+            t
+        };
+        let mut one = vec![b("Welcome bonus"), b("Referral bonus"), b("Cashback")];
+        let mut two = vec![b("Cashback"), b("Welcome bonus"), b("Referral bonus")];
+        number_identical(&mut one);
+        number_identical(&mut two);
+        let id = |list: &[RemoteTransaction], purpose: &str| {
+            list.iter()
+                .find(|t| t.purpose == purpose)
+                .unwrap()
+                .external_id
+                .clone()
+        };
+        for purpose in ["Welcome bonus", "Referral bonus", "Cashback"] {
+            assert_eq!(id(&one, purpose), id(&two, purpose));
+        }
+        assert_eq!(id(&one, "Cashback"), "monefit:2026-10-01 10:00:00|BONUS|5");
+        assert_eq!(
+            id(&one, "Referral bonus"),
+            "monefit:2026-10-01 10:00:00|BONUS|5#1"
+        );
+    }
+
+    #[test]
+    fn a_fee_is_booked_as_fee() {
+        let b = parse_booking(&entry("2026-10-01 10:00:00", "FEE", "1", "0", None)).unwrap();
+        assert_eq!(
+            (b.amount_cents, b.booking_text.as_str()),
+            (-100, tr("Gebühr"))
+        );
     }
 
     #[test]

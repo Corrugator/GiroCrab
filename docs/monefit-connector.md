@@ -5,7 +5,8 @@
 > This connector is an independent community project and is not affiliated with Monefit. Interface: unofficial. Using unofficial interfaces may violate the bank's terms of service.
 <!-- sync:connector-note:end -->
 
-Status: **verifiziert mit echtem Konto** (November 2026) – `ConnectorKind::Monefit` (Schlüssel `monefit`), direkter
+Status: **Test gesucht** – mit echtem Konto geprüft (November 2026): Anmeldung, Saldo, Zinsen und
+Einzahlungen; Auszahlungen und Gebühren noch nicht (siehe Offene Punkte) – `ConnectorKind::Monefit` (Schlüssel `monefit`), direkter
 HTTP-Login in `girocrab-core/src/connectors/monefit.rs`, kein Browserfenster, keine TAN.
 
 Monefit veröffentlicht keine API für Kundinnen und Kunden. Der Connector nutzt die
@@ -28,16 +29,17 @@ arbeitet.
 
 ## Regeln
 
-* `sum` ist immer positiv. `WITHDRAWAL`, `WITHDRAW`, `PAYOUT` und `FEE` werden als Belastung
-  gebucht, alle anderen Typen als Gutschrift. Beobachtet wurden bisher nur `INTEREST`
+* `sum` ist immer positiv. `WITHDRAWAL`, `WITHDRAW`, `PAYOUT` (Auszahlung) und `FEE` (Gebühr) werden
+  als Belastung gebucht, alle anderen Typen als Gutschrift. Beobachtet wurden bisher nur `INTEREST`
   (Zinsen), `DEPOSIT` (Einzahlung) und `BONUS`; die Abgangstypen sind aus der Benennung der
   Schnittstelle abgeleitet. Eine Gebühr (`fee`) wird vom Betrag abgezogen.
 * Buchungsdatum ist der Kalendertag aus `time`. Gegenpartei ist „Monefit SmartSaver“,
   Verwendungszweck ist `description` (sonst der Buchungstyp).
 * Das Feld `id` der Liste ist **keine** Buchungs-ID: alle Zinsbuchungen tragen dieselbe.
   Die Buchungs-ID wird deshalb aus Zeitstempel (sekundengenau), Typ, normalisiertem Betrag und
-  gegebenenfalls der Gebühr gebildet; völlig gleiche Buchungen in derselben Sekunde werden
-  durchnummeriert (`#1`, `#2` …).
+  gegebenenfalls der Gebühr gebildet. Gleiche IDs werden nach dem Verwendungszweck sortiert
+  durchnummeriert (`#1`, `#2` …), unabhängig von der Reihenfolge der Antwort. Der Verwendungszweck
+  selbst gehört nicht zur ID, damit eine umformulierte Beschreibung keine neuen Buchungen erzeugt.
 * Passwort und Token gehen nur an `https://api-smartsaver.monefit.com`; Weiterleitungen werden nicht verfolgt.
 * Eine Buchung ohne lesbares Datum oder ohne lesbaren Betrag verwirft den ganzen Abruf, ebenso ein fehlender
   Saldo oder eine Umsatzantwort, die keine Liste ist. Eine fehlende Gebühr zählt als 0.
