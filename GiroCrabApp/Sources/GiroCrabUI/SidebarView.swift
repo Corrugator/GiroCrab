@@ -774,8 +774,8 @@ struct AccountRow: View {
     }
 
     private var secondLine: SecondLine {
-        if let date = account.archivedDate { return .archived(date) }
         if let repaid { return .loan(repaid) }
+        if let date = account.archivedDate { return .archived(date) }
         return .subtitle(searchAwareSubtitle)
     }
 
@@ -830,7 +830,7 @@ struct AccountRow: View {
                 // archived accounts show no balance (#667), nor how far a loan was repaid
                 if !account.isArchived {
                     VStack(alignment: .trailing, spacing: 1) {
-                        balance
+                        balance(.callout)
                         if let repaid {
                             Text(repaidText(repaid))
                                 .sensitive(.amounts)
@@ -853,7 +853,7 @@ struct AccountRow: View {
                 // row 1: the whole width for the name
                 HStack(spacing: 4) {
                     // the owner takes no room in the title line: tooltip only
-                    Text(account.name).appFont(.body, weight: .medium).lineLimit(1).sensitive()
+                    Text(account.name).appFont(.callout, weight: .medium).lineLimit(1).sensitive()
                         .help(redaction.masking(account.owner))
                     revokedIcon
                     // a count bubble in the row: the icon (and its colour, #175) stays free
@@ -871,31 +871,24 @@ struct AccountRow: View {
                     case .archived(let date):
                         archivedLabel(date)
                     case .loan(let repaid):
-                        let bar = ProgressView(value: repaid)
+                        ProgressView(value: repaid)
                             .progressViewStyle(.linear)
                             .tint(Theme.loan.opacity(0.7))
                             .controlSize(.mini)
                             .frame(maxWidth: 44)
                             .sensitive(.amounts)
                             .help(redaction.masking(repaidText(repaid), .amounts))
-                        // in one line or not at all: a narrow sidebar keeps only the bar and its tooltip
-                        ViewThatFits(in: .horizontal) {
-                            HStack(spacing: 6) {
-                                bar
-                                Text(repaidText(repaid))
-                                    .sensitive(.amounts)
-                                    .appFont(.caption2).foregroundStyle(.secondary)
-                                    .fixedSize()
-                            }
-                            bar
-                        }
+                        Text(repaidText(repaid))
+                            .sensitive(.amounts)
+                            .appFont(.caption2).foregroundStyle(.secondary).lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     case .subtitle(let text):
                         subtitle(text)
                     }
                     Spacer(minLength: 4)
                     // archived accounts show no balance (#667)
                     if !account.isArchived {
-                        balance
+                        balance(.subheadline)
                     }
                 }
             }
@@ -943,10 +936,10 @@ struct AccountRow: View {
             .lineLimit(1)
     }
 
-    private var balance: some View {
+    private func balance(_ style: Font.TextStyle) -> some View {
         Text(Money.format(account.balanceCents, currency: account.currency))
             .sensitive(.amounts)
-            .appFont(.callout, monospacedDigit: true)
+            .appFont(style, monospacedDigit: true)
             .fixedSize() // the name / subtitle truncates, never the balance (#343)
             .foregroundStyle(onSelection ? AnyShapeStyle(.primary) : AnyShapeStyle(account.kind == .loan ? Theme.loan : (account.balanceCents < 0 ? Theme.negative : Theme.text)))
     }

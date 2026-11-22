@@ -21,10 +21,13 @@ enum SidebarDensity: String, CaseIterable, Identifiable {
 
     /// Owner initials as shown next to the name: first and last name ("Erika Mustermann" → "EM").
     /// Skips titles and other abbreviations ("Dr."), words without a leading letter ("&") and
-    /// reads "Mustermann, Erika" as "Erika Mustermann".
+    /// reads "Mustermann, Erika" as "Erika Mustermann" (a comma between two single words only).
     static func initials(of owner: String) -> String {
         let parts = owner.split(separator: ",", maxSplits: 1).map { String($0) }
-        let ordered = parts.count == 2 ? parts[1] + " " + parts[0] : owner
+        let singleWords = parts.count == 2 && parts.allSatisfy {
+            $0.split(whereSeparator: \.isWhitespace).count == 1
+        }
+        let ordered = singleWords ? parts[1] + " " + parts[0] : owner
         let words = ordered.split(whereSeparator: \.isWhitespace)
             .filter { $0.first?.isLetter == true && !$0.hasSuffix(".") }
         guard let first = words.first?.first else { return "" }

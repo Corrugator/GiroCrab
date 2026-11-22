@@ -22,5 +22,7 @@ final class SidebarDensityTests: XCTestCase {
         XCTAssertEqual(SidebarDensity.initials(of: "Muster GmbH & Co. KG"), "MK")
         XCTAssertEqual(SidebarDensity.initials(of: "Erika"), "E")
         XCTAssertEqual(SidebarDensity.initials(of: ""), "")
+        XCTAssertEqual(SidebarDensity.initials(of: "Erika Mustermann, Max Mustermann"), "EM")
+        XCTAssertEqual(SidebarDensity.initials(of: "Muster GmbH, Berlin"), "MB")
     }
 }
