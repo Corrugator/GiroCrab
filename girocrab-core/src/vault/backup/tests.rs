@@ -473,3 +473,78 @@ fn deletion_after_the_restore_syncs_as_usual() {
     assert_eq!(live(&a), (0, 0, 0));
     assert_eq!(live(&b), (0, 0, 0));
 }
+
+fn remote_account(ext: &str) -> crate::connectors::RemoteAccount {
+    crate::connectors::RemoteAccount {
+        external_ref: ext.into(),
+        name: "Giro".into(),
+        owner: String::new(),
+        iban: String::new(),
+        account_number: String::new(),
+        currency: "EUR".into(),
+        kind: crate::models::AccountKind::Checking,
+        balance_cents: 0,
+        balance_date: "2026-11-10".into(),
+    }
+}
+
+fn remote_tx(ext: &str) -> crate::connectors::RemoteTransaction {
+    crate::connectors::RemoteTransaction {
+        account_ref: ext.into(),
+        external_id: format!("{ext}-1"),
+        booking_date: "2026-11-10".into(),
+        value_date: "2026-11-10".into(),
+        amount_cents: -500,
+        currency: "EUR".into(),
+        counterparty: "Shop".into(),
+        purpose: "Kauf".into(),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn account_deleted_in_the_backup_stays_deleted_on_the_next_fetch() {
+    use crate::connectors::{FetchResult, store_fetch};
+    use crate::models::ConnectorKind;
+    let v = Vault::open(path(&temp_path("refetch")), vec![7u8; 32]).unwrap();
+    let c = v
+        .add_bank_connection(ConnectorKind::Comdirect, String::new(), "login".into())
+        .unwrap();
+    let fetch = || FetchResult {
+        accounts: vec![remote_account("DE1"), remote_account("DE2")],
+        transactions: vec![remote_tx("DE1"), remote_tx("DE2")],
+        ..Default::default()
+    };
+    store_fetch(&v, ConnectorKind::Comdirect, c, fetch()).unwrap();
+    // DE2 deleted with its booking while the connection existed
+    {
+        let db = v.db().unwrap();
+        db.execute_batch(
+            "UPDATE bank_connections SET created_ms = 100;
+             UPDATE accounts SET created_ms = 100;
+             UPDATE accounts SET deleted_ms = 200 WHERE external_ref = 'DE2';
+             UPDATE transactions SET deleted_ms = 200
+              WHERE account_id = (SELECT id FROM accounts WHERE external_ref = 'DE2');",
+        )
+        .unwrap();
+    }
+    let backup = temp_path("bak");
+    v.write_backup(path(&backup), PASSWORD.into()).unwrap();
+    v.restore_backup(path(&backup), PASSWORD.into()).unwrap();
+    assert_eq!(live(&v), (1, 1, 1));
+
+    store_fetch(&v, ConnectorKind::Comdirect, c, fetch()).unwrap();
+    assert_eq!(live(&v), (1, 1, 1));
+    let deleted: (i64, i64) = v
+        .db()
+        .unwrap()
+        .query_row(
+            "SELECT (SELECT count(*) FROM accounts WHERE external_ref = 'DE2' AND deleted_ms IS NOT NULL),
+                    (SELECT count(*) FROM transactions t JOIN accounts a ON a.id = t.account_id
+                      WHERE a.external_ref = 'DE2' AND t.deleted_ms IS NOT NULL)",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(deleted, (1, 1));
+}

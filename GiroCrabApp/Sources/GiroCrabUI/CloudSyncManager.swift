@@ -383,6 +383,20 @@ public final class CloudSyncManager {
         }
     }
 
+    /// Waits until no sync (manual or automatic) runs, so the next `sync` is not
+    /// dropped by its `isSyncing` guard (after a restore, #1090).
+    public func waitUntilIdle() async {
+        while true {
+            if let running = inFlight {
+                await running.value
+            } else if isSyncing || autoBusy {
+                try? await Task.sleep(for: .milliseconds(100))
+            } else {
+                return
+            }
+        }
+    }
+
     private func flush(_ vault: Vault) async {
         while let running = inFlight { await running.value }
         _ = autoState.tick(changeCount: vault.changeCount(), now: Date())

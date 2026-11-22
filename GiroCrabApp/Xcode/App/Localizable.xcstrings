@@ -30650,13 +30650,13 @@
         }
       }
     },
-    "Tresor aus der Sicherung wiederhergestellt. Der iCloud-Abgleich überträgt diesen Stand jetzt auf Ihre anderen Geräte." : {
+    "Tresor aus der Sicherung wiederhergestellt. Der Stand wird mit Ihren anderen Geräten abgeglichen; das Ergebnis sehen Sie unter Einstellungen › iCloud Sync." : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vault restored from the backup. iCloud Sync now brings this state to your other devices."
+            "value" : "Vault restored from the backup. It will be synchronized with your other devices; see Settings › iCloud Sync for the result."
           }
         }
       }
