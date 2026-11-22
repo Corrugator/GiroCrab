@@ -112,9 +112,11 @@ extension AppModel {
     }
 
     func requestSyncAll() {
-        // portal connections need an interactive login – not part of "sync all"
-        // logins whose accounts are all archived are not asked at all
-        requestSyncBatch { [self] in connections.filter { !usesPortal($0) && !usesFileImport($0) && !$0.allAccountsArchived } }
+        requestSyncBatch { [self] in
+            connections.filter {
+                !$0.allAccountsArchived && supportsSyncSchedule($0) && syncSchedule($0.id) != AutoSync.never
+            }
+        }
     }
 
     /// "Konten abrufen" in a group's menu: the logins behind the group's

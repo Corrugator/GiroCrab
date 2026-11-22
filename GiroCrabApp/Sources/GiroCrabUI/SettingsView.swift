@@ -168,7 +168,6 @@ struct GeneralSettings: View {
             TransferSettingsSection()
             BalanceChartSettingsSection()
             #if os(macOS)
-            AutoSyncSettingsSection()
             DockAndMenuBarSettingsSection()
             #endif
             #if os(iOS)
