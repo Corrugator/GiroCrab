@@ -216,6 +216,7 @@ struct WealthSlice: Identifiable, Equatable {
     let label: String
     let cents: Int64
     let color: Color
+    var personal = false
 
     /// Charts returns a value on the cumulative positive-value scale, not a sector index.
     static func id(at value: Double, in slices: [Self]) -> String? {
@@ -1211,7 +1212,7 @@ struct WealthView: View {
                 Group {
                     if cashChartStyle == .pie {
                         HeaderPieChart(slices: HeaderPieSlices.fold(
-                            s.cash.map { HeaderPieSlices.Part(id: $0.id.description, label: $0.name, cents: $0.balanceCents) }.filter { $0.cents > 0 },
+                            s.cash.map { HeaderPieSlices.Part(id: $0.id.description, label: $0.name, cents: $0.balanceCents, personal: true) }.filter { $0.cents > 0 },
                             limit: HeaderPieSlices.limit), emptyText: "Keine Daten")
                     } else if history.count < 2 {
                         Text("Keine Daten").foregroundStyle(Theme.secondary).frame(maxWidth: .infinity, alignment: .leading)
