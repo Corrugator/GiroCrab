@@ -31,7 +31,7 @@ final class RuleTagsTests: XCTestCase {
         XCTAssertTrue(model.rules(addingTag: try tag("Lebensmittel").id).isEmpty)
     }
 
-    func testSavingATagsOnlyRuleTagsTheBookingsAndKeepsTheirCategory() throws {
+    func testSavingATagsOnlyRuleTagsTheBookingsAndKeepsTheirCategory() async throws {
         let steuern = try tag("Steuern")
         let rewe = try XCTUnwrap(model.bookings.first { $0.counterparty.localizedCaseInsensitiveContains("REWE") })
         let category = rewe.categoryId
@@ -42,12 +42,44 @@ final class RuleTagsTests: XCTestCase {
         rule.tagIds = [steuern.id]
         rule.minAmountCents = nil
         rule.maxAmountCents = nil
-        XCTAssertNotNil(model.saveRule(rule))
+        let saved = await model.saveRule(rule, onlyUncategorized: false)
+        XCTAssertNotNil(saved)
         XCTAssertNil(model.errorMessage)
         let after = try XCTUnwrap(model.bookings.first { $0.id == rewe.id })
         XCTAssertTrue(after.tags.contains { $0.id == steuern.id })
         XCTAssertEqual(after.categoryId, category, "a tags-only rule leaves the category alone")
         XCTAssertEqual(model.rules(addingTag: steuern.id).map(\.name), ["Belege"])
+    }
+
+    func testSaveScopeProtectsExistingCategoriesUntilAllBookingsIsSelected() async throws {
+        let booking = try XCTUnwrap(model.bookings.first { $0.purpose == "Konzertticket" })
+        let oldCategory = try XCTUnwrap(model.categories.first?.id)
+        let newCategory = try XCTUnwrap(model.categories.first { $0.id != oldCategory }?.id)
+        model.setCategory(oldCategory, for: booking)
+        var rule = model.newRuleDraft(from: booking)
+        rule.field = .purpose
+        rule.pattern = booking.purpose
+        rule.categoryId = newCategory
+
+        let restricted = await model.saveRule(rule, onlyUncategorized: true)
+        rule.id = try XCTUnwrap(restricted)
+        XCTAssertEqual(model.bookings.first { $0.id == booking.id }?.categoryId, oldCategory)
+        XCTAssertEqual(model.bookings.first { $0.id == booking.id }?.categorySource, .manual)
+
+        let unrestricted = await model.saveRule(rule, onlyUncategorized: false)
+        XCTAssertEqual(unrestricted, rule.id)
+        XCTAssertEqual(model.bookings.first { $0.id == booking.id }?.categoryId, newCategory)
+        XCTAssertEqual(model.bookings.first { $0.id == booking.id }?.categorySource, .rule)
+
+        rule.categoryId = oldCategory
+        let restrictedEdit = await model.saveRule(rule, onlyUncategorized: true)
+        XCTAssertEqual(restrictedEdit, rule.id)
+        XCTAssertEqual(model.bookings.first { $0.id == booking.id }?.categoryId, newCategory)
+
+        model.setCategory(nil, for: booking)
+        let restrictedAfterClearing = await model.saveRule(rule, onlyUncategorized: true)
+        XCTAssertEqual(restrictedAfterClearing, rule.id)
+        XCTAssertEqual(model.bookings.first { $0.id == booking.id }?.categoryId, oldCategory)
     }
 
     func testRuleListCountsTheMatchingBookingsWithTheRuleTags() async throws {
@@ -68,11 +100,12 @@ final class RuleTagsTests: XCTestCase {
         XCTAssertEqual(after?[rental.id], before - 1, "a tag removed by hand no longer counts")
     }
 
-    func testARuleWithoutCategoryAndTagsIsRefused() {
+    func testARuleWithoutCategoryAndTagsIsRefused() async {
         var rule = model.newRuleDraft()
         rule.pattern = "REWE"
         rule.categoryId = 0
         rule.tagIds = []
-        XCTAssertNil(model.saveRule(rule))
+        let saved = await model.saveRule(rule, onlyUncategorized: true)
+        XCTAssertNil(saved)
     }
 }

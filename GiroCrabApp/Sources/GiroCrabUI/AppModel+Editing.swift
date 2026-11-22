@@ -502,15 +502,19 @@ extension AppModel {
         showRuleEditor = true
     }
 
-    @discardableResult
-    func saveRule(_ rule: Rule) -> Int64? {
-        guard let vault else { return nil }
+    func saveRule(_ rule: Rule, onlyUncategorized: Bool) async -> Int64? {
+        guard let pin = pinVault() else { return nil }
         do {
-            let id = try vault.saveRule(rule: rule)
-            _ = try vault.applyRules(onlyUncategorized: false)
+            let id = try await pin.run { vault in
+                let id = try vault.saveRule(rule: rule)
+                _ = try vault.applyRule(ruleId: id, onlyUncategorized: onlyUncategorized)
+                return id
+            }
+            guard isCurrent(pin) else { return nil }
             reloadAll()
             return id
         } catch {
+            guard isCurrent(pin) else { return nil }
             showError(String(localized: "Regel konnte nicht gespeichert werden"), describe(error))
             return nil
         }

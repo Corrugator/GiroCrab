@@ -58,6 +58,7 @@ struct RuleEditorView: View {
     @State private var draft: Rule?
     @State private var searchText: String = ""
     @State private var ruleToDelete: Rule?
+    @State private var isSaving = false
     /// Matching bookings that carry all of a rule's tags (#580), loaded off main.
     @State private var tagCounts: [Int64: UInt32] = [:]
 
@@ -193,6 +194,7 @@ struct RuleEditorView: View {
                 Button { model.applyAllRules() } label: { Label("Alle Regeln anwenden", systemImage: "play.fill") }
             }
         }
+        .disabled(isSaving)
         .confirmationDialog("Regel löschen?",
                             isPresented: Binding(get: { ruleToDelete != nil }, set: { if !$0 { ruleToDelete = nil } }),
                             titleVisibility: .visible, presenting: ruleToDelete) { rule in
@@ -263,10 +265,15 @@ struct RuleEditorView: View {
         draft = model.newRuleDraft()
     }
 
-    private func save(_ rule: Rule) {
-        if let id = model.saveRule(rule) {
-            selection = id
-            draft = model.rules.first { $0.id == id }
+    private func save(_ rule: Rule, onlyUncategorized: Bool) {
+        guard !isSaving else { return }
+        isSaving = true
+        Task {
+            defer { isSaving = false }
+            if let id = await model.saveRule(rule, onlyUncategorized: onlyUncategorized) {
+                selection = id
+                draft = model.rules.first { $0.id == id }
+            }
         }
     }
 
@@ -280,9 +287,10 @@ struct RuleEditorView: View {
 struct RuleForm: View {
     @Environment(AppModel.self) private var model
     @Binding var rule: Rule
-    let onSave: (Rule) -> Void
+    let onSave: (Rule, Bool) -> Void
     let onDelete: (Rule) -> Void
 
+    @State private var showSaveScope = false
     @State private var minText = ""
     @State private var maxText = ""
     @State private var direction = 0
@@ -385,7 +393,7 @@ struct RuleForm: View {
                                 Text(b.counterparty).lineLimit(1).sensitive()
                                 Spacer()
                                 if b.categorySource == .manual && rule.categoryId != 0 {
-                                    Image(systemName: "hand.raised.fill").foregroundStyle(.secondary).help("Manuell zugeordnet – die Regel ändert das nicht")
+                                    Image(systemName: "hand.raised.fill").foregroundStyle(.secondary).help("Manuell kategorisiert")
                                 }
                                 Text(Money.format(b.amountCents)).monospacedDigit().foregroundStyle(Money.ink(b.amountCents))
                                     .sensitive(.amounts)
@@ -404,11 +412,23 @@ struct RuleForm: View {
                     Button("Regel löschen …", role: .destructive) { onDelete(rule) }
                 }
                 Spacer()
-                Button("Speichern & anwenden") { onSave(rule) }
+                Button("Speichern & anwenden") { showSaveScope = true }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
                     .disabled(rule.pattern.trimmingCharacters(in: .whitespaces).isEmpty || preview.error != nil
                               || (rule.categoryId == 0 && rule.tagIds.isEmpty))
+                    .confirmationDialog("Auf welche Buchungen soll die Regel angewendet werden?",
+                                        isPresented: $showSaveScope, titleVisibility: .visible) {
+                        Button("Nur unkategorisierte Buchungen") { onSave(rule, true) }
+                        Button("Alle Buchungen", role: rule.categoryId == 0 ? nil : .destructive) {
+                            onSave(rule, false)
+                        }
+                        Button("Abbrechen", role: .cancel) {}
+                    } message: {
+                        if rule.categoryId != 0 {
+                            Text("Bei „Alle Buchungen“ kann die Regel auch manuell gesetzte Kategorien überschreiben.")
+                        }
+                    }
             }
             .padding(12)
         }

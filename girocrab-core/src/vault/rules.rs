@@ -332,6 +332,64 @@ impl Vault {
             .collect())
     }
 
+    /// Applies just this rule to existing bookings on explicit request.
+    /// `only_uncategorized = false` also replaces manually assigned categories.
+    pub fn apply_rule(&self, rule_id: i64, only_uncategorized: bool) -> Result<u32, CoreError> {
+        let db = self.db()?;
+        let tx = db.unchecked_transaction()?;
+        let Some(rule) = Self::load_rules(&tx)?
+            .into_iter()
+            .find(|rule| rule.id == rule_id && rule.enabled)
+        else {
+            return Ok(0);
+        };
+        let category_id = rule.category_id;
+        let set = RuleSet::new(vec![rule])?;
+
+        // Tag before categorising so both operations see the original category scope.
+        let uncategorized_ids = if only_uncategorized && set.sets_tags() {
+            Some(
+                tx.prepare(&format!(
+                    "SELECT t.id FROM transactions t JOIN accounts a ON a.id = t.account_id
+                 WHERE {LIVE_BOOKINGS_SQL} AND a.archived_unix IS NULL AND t.category_id IS NULL"
+                ))?
+                .query_map([], |row| row.get(0))?
+                .collect::<Result<HashSet<i64>, _>>()?,
+            )
+        } else {
+            None
+        };
+        let mut changed = crate::tags::tag_by_rules(&tx, &set, true, uncategorized_ids.as_ref())?;
+
+        if category_id != 0 {
+            let mut stmt = tx.prepare(&format!(
+                "SELECT {} FROM transactions t JOIN accounts a ON a.id = t.account_id
+                 WHERE {LIVE_BOOKINGS_SQL} AND a.archived_unix IS NULL
+                   AND (NOT ?1 OR t.category_id IS NULL) AND t.category_id IS NOT ?2
+                   AND NOT EXISTS (SELECT 1 FROM transaction_splits s WHERE s.transaction_id = t.id)",
+                RuleRow::COLUMNS
+            ))?;
+            let mut matching = Vec::<i64>::new();
+            let mut rows = stmt.query(params![only_uncategorized, category_id])?;
+            while let Some(row) = rows.next()? {
+                if set.categorise(&RuleRow::borrowed_input(row)?).is_some() {
+                    matching.push(row.get(0)?);
+                }
+            }
+            let now = crate::dates::now_ms();
+            let mut update = tx.prepare(
+                "UPDATE transactions SET category_id = ?1, rule_id = ?2, category_source = 'rule',
+                 category_ms = ?3 WHERE id = ?4",
+            )?;
+            for id in matching {
+                update.execute(params![category_id, rule_id, now, id])?;
+                changed.insert(id);
+            }
+        }
+        tx.commit()?;
+        Ok(changed.len() as u32)
+    }
+
     /// Runs all rules. `only_uncategorized = false` also re-evaluates
     /// transactions previously categorised by a rule (never manual ones).
     /// Also adds the rules' tags (#580; with `only_uncategorized = false` to every
