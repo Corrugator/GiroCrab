@@ -54,6 +54,9 @@ enum SharinboxScripts {
           items.push({isin, name: name || isin, quantity: free.quantity + blocked.quantity, price: amount(price[1]),
             priceDate: year + '-' + when[2] + '-' + when[1], currency, value: free.value + blocked.value});
         }
+        // every security block must have been read; otherwise a layout change would look like an empty depot
+        const blocks = (html.match(/<canvas[^>]*myChart-assets-/g) || []).length;
+        if (blocks !== items.length) fail('Unbekanntes Seitenformat.');
         return items;
       };
       const MARKERS = ['myChart-assets-', 'myChart-droitsActions'];

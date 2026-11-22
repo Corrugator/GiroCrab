@@ -91,6 +91,16 @@ test('nothing held is a valid, empty list; other pages and failures are errors',
     .__gcSharinbox.collect(), /Kurs nicht gefunden/);
 });
 
+test('a changed page layout is an error, never an empty depot', async () => {
+  // same page, but the security block is marked with single quotes: nothing would match
+  const changed = home(block('FR0000000001', 'Test AG', '45,140 (EUR)', ['100', '4.514,00 EUR'], ['-', '-']))
+    .replace('id="myChart-assets-FR0000000001"', "id='myChart-assets-FR0000000001'");
+  assert(changed.includes("myChart-assets-FR0000000001'") && changed.includes('myChart-droitsActions'));
+  await assert.rejects(page(async () => response(changed)).__gcSharinbox.collect(), /Seitenformat/);
+  // the rights block alone (nothing held) is still a valid, empty list
+  assert.deepEqual(JSON.parse(await page(async () => response(home())).__gcSharinbox.collect()).depot.items, []);
+});
+
 test('unknown number formats and mixed currencies are rejected', async () => {
   const bad = home(block('FR0000000001', 'X', '1,000 (EUR)', ['1,2,3', '1 EUR'], ['-', '-']));
   await assert.rejects(page(async () => response(bad)).__gcSharinbox.collect(), /Zahlenformat/);
