@@ -116,6 +116,33 @@ impl Vault {
         Ok(changed.len() as u32)
     }
 
+    /// Re-evaluates automatic assignments previously made by the edited rule.
+    fn refresh_rule_categories(
+        conn: &Connection,
+        rules: &[Rule],
+        rule_id: i64,
+    ) -> CoreResult<HashSet<i64>> {
+        let owned: HashSet<i64> = conn
+            .prepare(&format!(
+                "SELECT t.id FROM transactions t JOIN accounts a ON a.id = t.account_id
+                 WHERE {LIVE_BOOKINGS_SQL} AND a.archived_unix IS NULL
+                   AND t.category_source = 'rule' AND t.rule_id = ?1"
+            ))?
+            .query_map([rule_id], |row| row.get(0))?
+            .collect::<Result<_, _>>()?;
+        if owned.is_empty() {
+            return Ok(owned);
+        }
+        let category_rules = RuleSet::new(
+            rules
+                .iter()
+                .filter(|rule| rule.enabled && rule.category_id != 0)
+                .cloned()
+                .collect(),
+        )?;
+        Self::categorise_by_rules(conn, &category_rules, false, Some(&owned))
+    }
+
     /// `only`: restricts the run to these bookings. Returns the bookings whose
     /// category changed.
     fn categorise_by_rules(
@@ -334,16 +361,23 @@ impl Vault {
 
     /// Applies just this rule to existing bookings on explicit request.
     /// Category rules with higher priority retain precedence. `only_uncategorized = false`
-    /// allows replacing manually assigned categories when this rule takes precedence.
+    /// allows replacing manually assigned categories when this rule takes precedence
+    /// and re-evaluates the rule's previous automatic assignments.
     pub fn apply_rule(&self, rule_id: i64, only_uncategorized: bool) -> Result<u32, CoreError> {
         let db = self.db()?;
         let tx = db.unchecked_transaction()?;
         let rules = Self::load_rules(&tx)?;
+        let mut changed = if only_uncategorized {
+            HashSet::new()
+        } else {
+            Self::refresh_rule_categories(&tx, &rules, rule_id)?
+        };
         let Some(index) = rules
             .iter()
             .position(|rule| rule.id == rule_id && rule.enabled)
         else {
-            return Ok(0);
+            tx.commit()?;
+            return Ok(changed.len() as u32);
         };
         let rule = &rules[index];
         let category_id = rule.category_id;
@@ -362,7 +396,12 @@ impl Vault {
         } else {
             None
         };
-        let mut changed = crate::tags::tag_by_rules(&tx, &set, true, uncategorized_ids.as_ref())?;
+        changed.extend(crate::tags::tag_by_rules(
+            &tx,
+            &set,
+            true,
+            uncategorized_ids.as_ref(),
+        )?);
 
         if category_id != 0 {
             // Earlier rules are only consulted to determine precedence. This
@@ -377,12 +416,13 @@ impl Vault {
             let mut stmt = tx.prepare(&format!(
                 "SELECT {} FROM transactions t JOIN accounts a ON a.id = t.account_id
                  WHERE {LIVE_BOOKINGS_SQL} AND a.archived_unix IS NULL
-                   AND (NOT ?1 OR t.category_id IS NULL) AND t.category_id IS NOT ?2
+                   AND (NOT ?1 OR t.category_id IS NULL)
+                   AND (t.category_id IS NOT ?2 OR t.rule_id IS NOT ?3)
                    AND NOT EXISTS (SELECT 1 FROM transaction_splits s WHERE s.transaction_id = t.id)",
                 RuleRow::COLUMNS
             ))?;
             let mut matching = Vec::<i64>::new();
-            let mut rows = stmt.query(params![only_uncategorized, category_id])?;
+            let mut rows = stmt.query(params![only_uncategorized, category_id, rule_id])?;
             while let Some(row) = rows.next()? {
                 let input = RuleRow::borrowed_input(row)?;
                 if set.categorise(&input).is_some() && higher_priority.categorise(&input).is_none()
@@ -827,7 +867,8 @@ mod apply_rule_tests {
              INSERT INTO rules(name, category_id, field, match_kind, pattern, priority, enabled)
              VALUES ('Higher priority', 2, 'any', 'keyword', 'Priority', 10, 1),
                     ('Selected', 1, 'any', 'keyword', 'Demo', 20, 1),
-                    ('Disabled', 2, 'any', 'keyword', 'Demo', 5, 0);
+                    ('Disabled', 2, 'any', 'keyword', 'Demo', 5, 0),
+                    ('Lower priority', 1, 'any', 'keyword', 'Demo', 30, 1);
              INSERT INTO transactions(account_id, external_id, booking_date, amount_cents,
                                       counterparty, category_id, category_source, rule_id)
              VALUES (1, 'empty', '2026-01-02', -100, 'Demo New', NULL, 'none', NULL),
@@ -836,7 +877,8 @@ mod apply_rule_tests {
                     (1, 'higher', '2026-01-02', -100, 'Demo Priority', 2, 'rule', 1),
                     (1, 'higher-empty', '2026-01-02', -100, 'Demo Priority', NULL, 'none', NULL),
                     (1, 'stale', '2026-01-02', -100, 'Demo Stale', 2, 'rule', 1),
-                    (1, 'unmatched', '2026-01-02', -100, 'Priority Only', NULL, 'none', NULL);
+                    (1, 'unmatched', '2026-01-02', -100, 'Priority Only', NULL, 'none', NULL),
+                    (1, 'same-category', '2026-01-02', -100, 'Demo Same', 1, 'rule', 4);
              INSERT INTO transaction_splits(transaction_id, category_id, amount_cents)
              VALUES (3, 2, -100);",
             )
@@ -860,12 +902,73 @@ mod apply_rule_tests {
         assert_eq!(category("manual"), Some(2));
         assert_eq!(category("stale"), Some(2));
 
-        assert_eq!(vault.apply_rule(2, false).unwrap(), 2);
+        assert_eq!(vault.apply_rule(2, false).unwrap(), 3);
+        assert_eq!(vault.apply_rule(2, false).unwrap(), 0);
+        vault.delete_rule(4).unwrap();
+        assert_eq!(category("same-category"), Some(1));
         assert_eq!(category("manual"), Some(1));
         assert_eq!(category("stale"), Some(1));
         assert_eq!(category("higher"), Some(2));
         assert_eq!(category("higher-empty"), None);
         assert_eq!(category("unmatched"), None);
         assert_eq!(category("split"), None);
+    }
+
+    #[test]
+    fn unrestricted_edit_refreshes_only_the_rules_previous_assignments() {
+        let dir = crate::test_support::TempDir::new("girocrab-refresh-rule");
+        let path = dir.join("v.db");
+        let vault = Vault::open(path.to_string_lossy().to_string(), vec![7u8; 32]).unwrap();
+        vault
+            .db()
+            .unwrap()
+            .execute_batch(
+                "INSERT INTO account_groups(name) VALUES ('G');
+             INSERT INTO accounts(group_id, external_ref, name) VALUES (1, 'A1', 'Konto');
+             INSERT INTO categories(name) VALUES ('Bisher'), ('Ersatz');
+             INSERT INTO rules(name, category_id, field, match_kind, pattern, priority)
+             VALUES ('Edited', 1, 'any', 'keyword', 'Demo', 10),
+                    ('Fallback', 2, 'any', 'keyword', 'Fallback', 20);
+             INSERT INTO transactions(account_id, external_id, booking_date, amount_cents,
+                                      counterparty, category_id, category_source, rule_id)
+             VALUES (1, 'obsolete', '2026-01-02', -100, 'Demo', 1, 'rule', 1),
+                    (1, 'fallback', '2026-01-02', -100, 'Demo Fallback', 1, 'rule', 1),
+                    (1, 'manual', '2026-01-02', -100, 'Demo Fallback', 1, 'manual', NULL),
+                    (1, 'unrelated', '2026-01-02', -100, 'Fallback', NULL, 'none', NULL),
+                    (1, 'new-match', '2026-01-02', -100, 'Other', NULL, 'none', NULL);",
+            )
+            .unwrap();
+        let assignment = |id: &str| -> (Option<i64>, Option<i64>) {
+            vault
+                .db()
+                .unwrap()
+                .query_row(
+                    "SELECT category_id, rule_id FROM transactions WHERE external_id = ?1",
+                    [id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .unwrap()
+        };
+        let mut rule = vault.list_rules().unwrap().remove(0);
+        rule.pattern = "Other".into();
+        vault.save_rule(rule.clone()).unwrap();
+
+        assert_eq!(vault.apply_rule(1, true).unwrap(), 1);
+        assert_eq!(assignment("obsolete"), (Some(1), Some(1)));
+        assert_eq!(assignment("fallback"), (Some(1), Some(1)));
+        assert_eq!(vault.apply_rule(1, false).unwrap(), 2);
+        assert_eq!(assignment("obsolete"), (None, None));
+        assert_eq!(assignment("fallback"), (Some(2), Some(2)));
+        assert_eq!(assignment("manual"), (Some(1), None));
+        assert_eq!(assignment("unrelated"), (None, None));
+        assert_eq!(assignment("new-match"), (Some(1), Some(1)));
+        assert_eq!(vault.apply_rule(1, false).unwrap(), 0);
+
+        rule.enabled = false;
+        vault.save_rule(rule).unwrap();
+        assert_eq!(vault.apply_rule(1, true).unwrap(), 0);
+        assert_eq!(assignment("new-match"), (Some(1), Some(1)));
+        assert_eq!(vault.apply_rule(1, false).unwrap(), 1);
+        assert_eq!(assignment("new-match"), (None, None));
     }
 }
