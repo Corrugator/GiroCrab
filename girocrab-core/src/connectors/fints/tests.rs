@@ -658,6 +658,7 @@ fn sepa_acc(iban: &str, number: &str) -> SepaAccount {
         account_number: number.into(),
         sub_account: String::new(),
         blz: "20041155".into(),
+        full_kti: false,
     }
 }
 
@@ -754,6 +755,7 @@ fn parses_upd_with_allowed_transactions_and_loans() {
         account_number: "0098765400".into(),
         sub_account: String::new(),
         blz: "52090000".into(),
+        full_kti: false,
     });
     assert_eq!(kti, "::0098765400::280:52090000");
     // IBAN known: IBAN:BIC – except Consorsbank, which wants the full form.
@@ -763,6 +765,7 @@ fn parses_upd_with_allowed_transactions_and_loans() {
         account_number: "0123456789".into(),
         sub_account: String::new(),
         blz: blz.into(),
+        full_kti: false,
     };
     assert_eq!(FinTsConnector::kti(&acc("52090000")), "DE00:BICXDEXX");
     assert_eq!(
@@ -1386,6 +1389,7 @@ fn builds_hkcaz_with_escaped_camt_urn() {
         account_number: String::new(),
         sub_account: String::new(),
         blz: "52090000".into(),
+        full_kti: false,
     };
     let seg = c.hkcaz(
         &acc,
@@ -1411,6 +1415,7 @@ fn builds_hkwpd_for_depot_with_touchdown() {
         account_number: "1234567".into(),
         sub_account: String::new(),
         blz: "12030000".into(),
+        full_kti: false,
     };
     assert_eq!(
         FinTsConnector::hkwpd(6, &acc, None),
@@ -1438,6 +1443,7 @@ fn loan_sub_accounts_get_distinct_labels() {
         account_number: "0098765400".into(),
         sub_account: sub.into(),
         blz: "52090000".into(),
+        full_kti: false,
     };
     assert_ne!(account_label(&mk("01")), account_label(&mk("02")));
     assert_eq!(account_label(&mk("")), "0098765400");
