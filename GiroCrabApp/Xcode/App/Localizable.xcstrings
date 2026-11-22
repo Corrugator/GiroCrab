@@ -24690,6 +24690,17 @@
         }
       }
     },
+    "Notiz hinzufügen …" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add a note …"
+          }
+        }
+      }
+    },
     "Notizen" : {
       "extractionState" : "manual",
       "localizations" : {

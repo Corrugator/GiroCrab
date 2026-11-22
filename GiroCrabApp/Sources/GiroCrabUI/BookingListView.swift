@@ -143,8 +143,20 @@ struct BookingStreamView: View {
                 get: { hSize == .compact && model.showBookingSheet && model.selectedBookingID != nil },
                 set: { if !$0 { model.showBookingSheet = false } }
             )) {
-                NavigationStack { InspectorView() }
-                    .presentationDetents([.medium, .large])
+                // Title + "Fertig" (UI-Audit INS-3); the merchant is personal, so the
+                // title is masked in the bug report (a parameter text, no `.sensitive()`).
+                NavigationStack {
+                    InspectorView()
+                        .navigationTitle(redaction.masking(model.selectedBooking?.merchant.name ?? String(localized: "Buchung")))
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Fertig") { model.showBookingSheet = false }
+                            }
+                        }
+                }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
             #endif
             // Drop a receipt anywhere on the stream: matched by amount/date/merchant.
