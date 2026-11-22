@@ -112,6 +112,8 @@ extension AppModel {
             showStandingSheet = false
             activeTransferIsStanding = true
             activeTransfer = session
+            // the TAN sheet asks to compare what was sent: amount and the end of the recipient IBAN (#949, #1475)
+            activeTransferComparison = TanComparison(iban: request.recipientIban, amountCents: request.amountCents)
             Task {
                 do {
                     self.handleTransfer(try await session.start(), connection: connection)
