@@ -944,6 +944,65 @@ fn stored_time_deposit_is_not_turned_back_into_savings() {
     std::fs::remove_file(path).ok();
 }
 
+/// #1630: a Bausparvertrag stored as savings before becomes "building_savings" (kind, symbol and
+/// section) with the next retrieval; set by hand, it stays one when a bank reports Savings.
+#[test]
+fn stored_savings_becomes_building_savings_and_stays_one() {
+    let (v, path) = demo_vault();
+    let conn = v
+        .add_bank_connection(ConnectorKind::Bhw, String::new(), "Bausparer".into())
+        .unwrap();
+    let fetch = |kind| {
+        store_fetch(
+            &v,
+            ConnectorKind::Bhw,
+            conn,
+            FetchResult {
+                accounts: vec![RemoteAccount {
+                    external_ref: "B".into(),
+                    name: "Bausparvertrag".into(),
+                    owner: String::new(),
+                    iban: String::new(),
+                    account_number: String::new(),
+                    currency: "EUR".into(),
+                    kind,
+                    balance_cents: 1_000_00,
+                    balance_date: "2026-11-11".into(),
+                }],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    };
+    let stored = || -> (String, String, String) {
+        v.db()
+            .unwrap()
+            .query_row(
+                "SELECT a.kind, a.sf_symbol, g.builtin_role FROM accounts a
+                   JOIN account_groups g ON g.id = a.group_id WHERE a.external_ref = 'B'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap()
+    };
+    // stored by a build before #1630
+    fetch(AccountKind::Savings);
+    assert_eq!(stored().0, "savings");
+    fetch(AccountKind::BuildingSavings);
+    assert_eq!(
+        stored(),
+        (
+            "building_savings".to_string(),
+            AccountKind::BuildingSavings.sf_symbol().to_string(),
+            "Bausparen".to_string()
+        )
+    );
+    // a bank that still says Savings does not turn it back
+    fetch(AccountKind::Savings);
+    assert_eq!(stored().0, "building_savings");
+    std::fs::remove_file(path).ok();
+}
+
 /// #1002: an unlinked Festgeld that a Savings fetch adopts by IBAN is linked,
 /// but keeps its kind, symbol and group.
 #[test]

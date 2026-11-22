@@ -6844,6 +6844,17 @@
         }
       }
     },
+    "Bausparen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Building savings"
+          }
+        }
+      }
+    },
     "Bausparverträge und Umsätze abrufen …" : {
       "extractionState" : "manual",
       "localizations" : {

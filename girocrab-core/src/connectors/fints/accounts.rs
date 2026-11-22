@@ -18,7 +18,8 @@ pub(super) fn kind_from_code(code: u32) -> AccountKind {
     // 30-39 Depot, 40-49 Darlehen, 50-59 Kreditkarte, 60-69 Fonds-Depot,
     // 70-79 Bausparvertrag, 80-89 Versicherung, 90-99 Sonstige
     match code {
-        10..=29 | 70..=79 => AccountKind::Savings,
+        10..=29 => AccountKind::Savings,
+        70..=79 => AccountKind::BuildingSavings,
         30..=39 | 60..=69 => AccountKind::Brokerage,
         40..=49 => AccountKind::Loan,
         50..=59 => AccountKind::CreditCard,

@@ -119,6 +119,24 @@ final class WealthSummaryTests: XCTestCase {
         XCTAssertTrue(WealthSummary(accounts: []).cashByKind.isEmpty)
     }
 
+    /// #1630: a Bausparvertrag is cash in "Vermögen" (a credit, no debt) but not money at hand, so
+    /// "Verfügbar" leaves it out; "Kontoart ändern" puts it into its own section.
+    func testBuildingSavingsIsCashButNotAtHand() throws {
+        let model = AppModel(options: LaunchOptions(arguments: ["--demo-seed"], environment: [:]))
+        let savings = try XCTUnwrap(model.allAccounts.first { $0.kind == .savings && $0.inTotal })
+        XCTAssertTrue(model.liquidAccounts.map(\.id).contains(savings.id))
+        XCTAssertTrue(AccountKind.importChoices.contains(.buildingSavings))
+
+        model.setAccountKind(savings.id, to: .buildingSavings)
+        let contract = try XCTUnwrap(model.allAccounts.first { $0.id == savings.id })
+        XCTAssertEqual(contract.kind, .buildingSavings)
+        XCTAssertEqual(WealthBucket.bucket(for: contract), .cash)
+        XCTAssertFalse(model.liquidAccounts.map(\.id).contains(contract.id), "„Verfügbar“ counts money at hand only")
+        XCTAssertTrue(WealthSummary(accounts: model.allAccounts).cashByKind.contains { $0.kind == .buildingSavings })
+        let section = try XCTUnwrap(model.groups.first { $0.id == contract.groupId })
+        XCTAssertEqual(section.name, accountKindSection(kind: .buildingSavings).name)
+    }
+
     func testPositiveCardBalanceStaysAnAssetWhenDebtsAreLeftOut() throws {
         let model = AppModel(options: LaunchOptions(arguments: ["--demo-seed"], environment: [:]))
         var card = try XCTUnwrap(model.allAccounts.first { $0.kind == .creditCard })

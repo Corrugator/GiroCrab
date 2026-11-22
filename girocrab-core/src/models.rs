@@ -185,6 +185,9 @@ pub enum AccountKind {
     Savings,
     /// Fixed-term deposit (Festgeld, #1002): money is tied up until maturity.
     TimeDeposit,
+    /// Building savings contract (Bausparvertrag, #1630) in its savings phase: a credit, but
+    /// bound by contract, so it is no money at hand. Its loan phase is a `Loan`.
+    BuildingSavings,
     CreditCard,
     PaymentService,
     Brokerage,
@@ -199,6 +202,7 @@ impl AccountKind {
             AccountKind::Checking => "checking",
             AccountKind::Savings => "savings",
             AccountKind::TimeDeposit => "time_deposit",
+            AccountKind::BuildingSavings => "building_savings",
             AccountKind::CreditCard => "credit_card",
             AccountKind::PaymentService => "payment_service",
             AccountKind::Brokerage => "brokerage",
@@ -210,6 +214,7 @@ impl AccountKind {
         match s {
             "savings" => AccountKind::Savings,
             "time_deposit" => AccountKind::TimeDeposit,
+            "building_savings" => AccountKind::BuildingSavings,
             "credit_card" => AccountKind::CreditCard,
             "payment_service" => AccountKind::PaymentService,
             "brokerage" => AccountKind::Brokerage,
@@ -224,6 +229,7 @@ impl AccountKind {
             AccountKind::Checking => "building.columns",
             AccountKind::Savings => "banknote",
             AccountKind::TimeDeposit => "lock.circle",
+            AccountKind::BuildingSavings => "house.circle",
             AccountKind::CreditCard => "creditcard",
             AccountKind::PaymentService => "envelope.circle",
             AccountKind::Brokerage => "chart.line.uptrend.xyaxis",

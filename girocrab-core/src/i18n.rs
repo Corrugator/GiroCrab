@@ -183,6 +183,7 @@ fn default_name_en(de: &str) -> Option<&'static str> {
         "Kreditkarten" => "Credit cards",
         "Depots & ETFs" => "Portfolios & ETFs",
         "Darlehen & Kredite" => "Loans",
+        "Bausparen" => "Building savings",
         "Importierte Konten" => "Imported accounts",
         // Starter categories.
         "Einnahmen" => "Income",
@@ -2064,6 +2065,7 @@ mod tests {
             CreditCard,
             Brokerage,
             Loan,
+            BuildingSavings,
         ];
         let orders: Vec<i32> = kinds
             .iter()

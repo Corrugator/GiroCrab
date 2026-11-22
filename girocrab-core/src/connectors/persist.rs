@@ -426,17 +426,20 @@ pub(crate) fn store_fetch(
                     // first stored as checking (e.g. C24 PocketZINS, typed by product).
                     // Loan: a Schwäbisch Hall Bausparvertrag moving on to its loan phase
                     // (same contract id), which must not stay a savings account.
-                    // A stored Festgeld stays one when the bank reports Savings (#1002).
+                    // BuildingSavings: Bausparverträge stored as savings before #1630.
+                    // A stored Festgeld or Bausparvertrag stays one when the bank reports
+                    // Savings (#1002, #1630): the user may have set it by hand.
                     if acc.kind == AccountKind::Brokerage
                         || acc.kind == AccountKind::Savings
                         || acc.kind == AccountKind::TimeDeposit
+                        || acc.kind == AccountKind::BuildingSavings
                         || (acc.kind == AccountKind::Loan && kind == ConnectorKind::SchwaebischHall)
                     {
                         let (group, sym, order) = group_for(acc.kind);
                         let gid = Vault::ensure_group(&tx, group, sym, order)?;
                         let changed = tx.execute(
                             // a symbol the user picked (symbol_ms > 0) stays
-                            "UPDATE accounts SET kind = ?1, sf_symbol = CASE WHEN symbol_ms > 0 THEN sf_symbol ELSE ?2 END, group_id = ?3 WHERE id = ?4 AND kind <> ?1 AND NOT (?1 = 'savings' AND kind = 'time_deposit')",
+                            "UPDATE accounts SET kind = ?1, sf_symbol = CASE WHEN symbol_ms > 0 THEN sf_symbol ELSE ?2 END, group_id = ?3 WHERE id = ?4 AND kind <> ?1 AND NOT (?1 = 'savings' AND kind IN ('time_deposit', 'building_savings'))",
                             params![acc.kind.as_str(), acc.kind.sf_symbol(), gid, id],
                         )?;
                         if changed > 0 {
@@ -1118,6 +1121,9 @@ pub(crate) fn store_fetch(
 
 /// Sidebar sections of the "by kind" view (fixed order): one per account kind (#1003).
 /// Step 37 of `schema.rs` moves old vaults to these; its sections must match.
+/// A vault stores a section's place when it creates the section, so a new kind takes the next
+/// free place instead of renumbering the others: "Bausparen" (#1630) comes after the loans, the
+/// phase a Bausparvertrag moves on to.
 pub(crate) fn group_for(kind: AccountKind) -> (&'static str, &'static str, i32) {
     match kind {
         AccountKind::Checking => ("Girokonten", "building.columns", 1),
@@ -1128,6 +1134,7 @@ pub(crate) fn group_for(kind: AccountKind) -> (&'static str, &'static str, i32) 
         AccountKind::CreditCard => ("Kreditkarten", "creditcard", 6),
         AccountKind::Brokerage => ("Depots & ETFs", "chart.pie", 7),
         AccountKind::Loan => ("Darlehen & Kredite", "house", 8),
+        AccountKind::BuildingSavings => ("Bausparen", "house.circle", 9),
     }
 }
 

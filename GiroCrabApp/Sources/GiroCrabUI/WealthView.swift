@@ -23,7 +23,8 @@ enum WealthBucket: CaseIterable {
     /// Sachwerte (property, car, gold …) are stored as a depot-like account, but they are no securities.
     static func bucket(for account: Account, tangible: Bool = false) -> WealthBucket {
         switch account.kind {
-        case .checking, .savings, .timeDeposit, .cash, .paymentService: .cash
+        // a Bausparvertrag is a credit, tied up but no debt (#1630)
+        case .checking, .savings, .timeDeposit, .buildingSavings, .cash, .paymentService: .cash
         case .brokerage: tangible ? .tangibles : .securities
         case .creditCard, .loan: .liabilities
         }
