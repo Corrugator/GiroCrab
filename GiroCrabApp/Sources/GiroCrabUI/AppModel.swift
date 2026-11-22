@@ -812,7 +812,8 @@ public final class AppModel {
     /// accounts still loading, a sync running): shown once that is over (`presentPendingPaymentLink`).
     var pendingPaymentLink: ParsedPayment?
     /// The open vault's accounts have been loaded once (`applyAccountGroups`): an empty list then
-    /// means no accounts, not "not loaded yet". Reset with the vault (`releaseVaultState`, `useVault`).
+    /// means no accounts, not "not loaded yet". Reset with the vault (`releaseVaultState`, `useVault`,
+    /// `adoptDemoVault`, `openDemoVault`).
     @ObservationIgnored var accountsLoaded = false
     /// A transfer form is being swapped for the batch form or back: closing the one must not let a
     /// waiting link take the form before the other opens (`switchToBatchTransfer`, `switchToSingleTransfer`).
@@ -1276,6 +1277,7 @@ public final class AppModel {
 
     private func adoptDemoVault(_ v: Vault) {
         vault = v
+        accountsLoaded = false
         lockPreview = false
         demoActive = true
         vaultState = .open
@@ -1305,6 +1307,7 @@ public final class AppModel {
             let v = try Vault.open(path: prepared ?? url.path, key: key)
             if prepared == nil { _ = try v.seedDemoData() }
             vault = v
+            accountsLoaded = false
             lockPreview = false
             demoActive = true
             vaultState = .open
