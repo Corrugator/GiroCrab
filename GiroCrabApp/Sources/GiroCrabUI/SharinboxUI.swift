@@ -56,23 +56,37 @@ enum SharinboxScripts {
         }
         return items;
       };
+      const MARKERS = ['myChart-assets-', 'myChart-droitsActions'];
+      const hasOverview = html => MARKERS.some(m => html.includes(m));
+      // The overview the user sees: this document and same-origin frames (the portal may embed it).
+      const shown = () => {
+        const out = [];
+        const add = doc => { try { if (doc?.documentElement) out.push(doc.documentElement.outerHTML); } catch {} };
+        add(document);
+        try { for (const f of document.querySelectorAll('iframe')) add(f.contentDocument); } catch {}
+        return out.filter(hasOverview);
+      };
+      const fetched = async () => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
+        try {
+          const r = await fetch(HOME, {method: 'GET', credentials: 'same-origin', redirect: 'error',
+            headers: {'Accept': 'text/html'}, signal: controller.signal});
+          if (!r.ok) return {status: r.status};
+          const html = await r.text();
+          return hasOverview(html) ? {html} : {status: 0};
+        } catch { return {status: 0}; } finally { clearTimeout(timeout); }
+      };
       window.__gcSharinbox = {
-        // signed in: the page is inside the portal area after the login
-        ready: () => location.origin === pageOrigin && location.pathname.startsWith('/SharinBox/'),
+        // signed in: the overview is on screen
+        ready: () => location.origin === pageOrigin && shown().length > 0,
         collect: async () => {
           if (location.origin !== pageOrigin) fail('Bitte erneut anmelden.');
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 30000);
-          let html;
-          try {
-            const r = await fetch(HOME, {method: 'GET', credentials: 'same-origin', redirect: 'error',
-              headers: {'Accept': 'text/html'}, signal: controller.signal});
-            if (!r.ok) fail('Abruf fehlgeschlagen (HTTP ' + r.status + '). Bitte erneut anmelden.');
-            html = await r.text();
-          } finally { clearTimeout(timeout); }
-          const items = parse(html);
-          if (items.length === 0 && !html.includes('myChart-droitsActions')) fail('Keine Bestandsübersicht erkannt. Bitte erneut anmelden.');
-          return JSON.stringify({version: 1, asOf: new Date().toISOString().slice(0, 10), depot: {items}});
+          // a fresh copy of the start page; otherwise what is on screen
+          const got = await fetched();
+          const html = got.html || shown()[0];
+          if (!html) fail(got.status ? 'Abruf fehlgeschlagen (HTTP ' + got.status + '). Bitte erneut anmelden.' : 'Keine Bestandsübersicht erkannt. Bitte erneut anmelden.');
+          return JSON.stringify({version: 1, asOf: new Date().toISOString().slice(0, 10), depot: {items: parse(html)}});
         }
       };
     })();

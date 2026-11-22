@@ -29,16 +29,18 @@ const rights = '<div class="ml-3 mt-3"><canvas id="myChart-droitsActions"></canv
 const home = (...blocks) => '<html><body><h4>Wertpapiere</h4>' + blocks.join('') + rights + '</body></html>';
 const standard = home(block('FR0000000001', 'Test AG', '45,140 (EUR)', ['16.290', '735.330,60 EUR'], ['-', '-']));
 
-function page(fetch, {origin=pageOrigin, pathname='/SharinBox/connexion.do'} = {}) {
+// `shown` is the HTML the user currently sees (the portal may render it in a frame).
+function page(fetch, {origin=pageOrigin, shown=''} = {}) {
   const window = {};
-  const context = vm.createContext({window, location:{origin, pathname}, fetch, AbortController, setTimeout, clearTimeout, Date});
+  const document = {documentElement:{outerHTML:shown}, querySelectorAll: () => []};
+  const context = vm.createContext({window, document, location:{origin}, fetch, AbortController, setTimeout, clearTimeout, Date});
   vm.runInContext(hook, context);
   return window;
 }
 
 test('collects the share, its price and value; nothing else crosses', async () => {
   const calls = [];
-  const w = page(async (url, options) => { calls.push({url, options}); return response(standard); });
+  const w = page(async (url, options) => { calls.push({url, options}); return response(standard); }, {shown: standard});
   assert.equal(w.__gcSharinbox.ready(), true);
   const snapshot = await w.__gcSharinbox.collect(), data = JSON.parse(snapshot);
   assert.equal(data.version, 1);
@@ -61,6 +63,13 @@ test('available and blocked balances are added up; several securities are listed
   const items = JSON.parse(await w.__gcSharinbox.collect()).depot.items;
   assert.deepEqual(items.map(i => [i.isin, i.quantity, i.value, i.price]),
     [['FR0000000001', 150, 1500, 10], ['DE0000000002', 4.5, 11.25, 2.5]]);
+});
+
+test('ready only while the overview is shown; the shown page is the fallback for the fetch', async () => {
+  assert.equal(page(async () => response(''), {shown: '<html>Login</html>'}).__gcSharinbox.ready(), false);
+  const w = page(async () => response('', 500), {shown: standard});
+  assert.equal(w.__gcSharinbox.ready(), true);
+  assert.equal(JSON.parse(await w.__gcSharinbox.collect()).depot.items[0].isin, 'FR0000000001');
 });
 
 test('nothing held is a valid, empty list; other pages and failures are errors', async () => {
