@@ -1131,6 +1131,24 @@ pub(crate) fn group_for(kind: AccountKind) -> (&'static str, &'static str, i32) 
     }
 }
 
+/// The section of an account kind in the "Kontoart" sidebar view (`group_for`): its name in the
+/// current language and its place. Views that group accounts by kind elsewhere (Vermögen › Cash
+/// nach Kontoart, #1631) take both from here, so they cannot drift apart from the sidebar.
+pub fn account_kind_section(kind: AccountKind) -> crate::models::AccountKindSection {
+    account_kind_section_in(crate::i18n::current(), kind)
+}
+
+pub(crate) fn account_kind_section_in(
+    lang: crate::i18n::Lang,
+    kind: AccountKind,
+) -> crate::models::AccountKindSection {
+    let (name, _, sort_order) = group_for(kind);
+    crate::models::AccountKindSection {
+        name: crate::i18n::display_name_in(lang, name),
+        sort_order,
+    }
+}
+
 /// Day retrieval was switched off; moved to the catch-up key once it is switched on again.
 fn documents_off_since_key(connection_id: i64) -> String {
     format!("documents.fetch.off_since.{connection_id}")

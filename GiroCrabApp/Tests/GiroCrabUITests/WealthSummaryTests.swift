@@ -105,10 +105,14 @@ final class WealthSummaryTests: XCTestCase {
         // Bargeld before Zahlungsdienste; the depot is no cash
         XCTAssertEqual(groups.map(\.kind), [.timeDeposit, .checking, .savings, .cash, .paymentService])
         XCTAssertEqual(groups.map(\.cents), [5_000, 3_000, 3_000, 3_000, 3_000])
-        // headings for several accounts, as the sidebar sections name them (#1620)
-        XCTAssertEqual(groups.first { $0.kind == .checking }?.title, String(localized: "Girokonten"))
-        XCTAssertEqual(groups.first { $0.kind == .paymentService }?.title, String(localized: "Zahlungsdienste"))
-        XCTAssertEqual(groups.first { $0.kind == .savings }?.title, AccountKind.savings.label)
+        // each heading is the name of the kind's section in the "Kontoart" sidebar view (#1620):
+        // a demo cash account sits in exactly that section
+        let cashAccounts = model.allAccounts.filter { WealthBucket.bucket(for: $0) == .cash && $0.archivedUnix == nil }
+        XCTAssertFalse(cashAccounts.isEmpty)
+        for a in cashAccounts {
+            let section = try XCTUnwrap(model.groups.first { $0.id == a.groupId }, a.name)
+            XCTAssertEqual(CashKindGroup(kind: a.kind, accounts: [a]).title, section.name, a.name)
+        }
         XCTAssertEqual(groups.first { $0.kind == .checking }?.accounts.map(\.id).sorted(), [1, 3])
         XCTAssertEqual(groups.reduce(0) { $0 + $1.cents }, s.cashCents)
         XCTAssertEqual(Set(groups.map(\.id)).count, groups.count)

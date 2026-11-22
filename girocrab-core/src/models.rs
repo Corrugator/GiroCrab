@@ -233,6 +233,16 @@ impl AccountKind {
     }
 }
 
+/// The section an account kind has in the "Kontoart" sidebar view (`connectors::account_kind_section`).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct AccountKindSection {
+    /// The section's name in the current language ("Girokonten", "Checking accounts").
+    pub name: String,
+    /// Its place among the sections, smallest first.
+    pub sort_order: i32,
+}
+
 #[derive(Debug, Clone, uniffi::Record)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BankConnection {

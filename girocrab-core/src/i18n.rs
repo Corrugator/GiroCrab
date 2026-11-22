@@ -2049,6 +2049,35 @@ mod tests {
         assert_eq!(tr_in(Lang::En, "Gibt es nicht"), "Gibt es nicht");
     }
 
+    /// Every kind's sidebar section (#1003) has an English name and a place of its own, in the
+    /// order the "Kontoart" view lists them; other views take both from here (#1631).
+    #[test]
+    fn every_account_kind_section_has_an_english_name_and_its_own_place() {
+        use crate::connectors::account_kind_section_in as section;
+        use crate::models::AccountKind::*;
+        let kinds = [
+            Checking,
+            Savings,
+            TimeDeposit,
+            Cash,
+            PaymentService,
+            CreditCard,
+            Brokerage,
+            Loan,
+        ];
+        let orders: Vec<i32> = kinds
+            .iter()
+            .map(|&k| section(Lang::En, k).sort_order)
+            .collect();
+        assert!(orders.windows(2).all(|w| w[0] < w[1]), "{orders:?}");
+        for kind in kinds {
+            let (de, en) = (section(Lang::De, kind).name, section(Lang::En, kind).name);
+            assert_ne!(de, en, "{kind:?} has no English section name");
+        }
+        assert_eq!(section(Lang::De, Checking).name, "Girokonten");
+        assert_eq!(section(Lang::En, PaymentService).name, "Payment services");
+    }
+
     #[test]
     fn default_names_translate() {
         assert_eq!(display_name_in(Lang::En, "Girokonten"), "Checking accounts");
