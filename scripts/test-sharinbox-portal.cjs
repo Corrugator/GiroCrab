@@ -43,7 +43,7 @@ const downloadPath = id => '/SharinBox/sgdocs/download.do?idSgdocs=' + id;
 function page(fetch, {origin=pageOrigin, shown=''} = {}) {
   const window = {};
   const document = {documentElement:{outerHTML:shown}, querySelectorAll: () => []};
-  const context = vm.createContext({window, document, location:{origin}, fetch, AbortController, setTimeout, clearTimeout, Date});
+  const context = vm.createContext({window, document, location:{origin}, fetch, AbortController, setTimeout, clearTimeout, Date, btoa});
   vm.runInContext(hook, context);
   return window;
 }
