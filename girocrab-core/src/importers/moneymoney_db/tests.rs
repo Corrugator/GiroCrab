@@ -1546,6 +1546,52 @@ fn bookings_merged_into_an_account_under_another_login_leave_it_there() {
 }
 
 #[test]
+fn an_open_source_of_the_same_login_counts_for_an_account_under_another_login() {
+    // the Girokonto, now under another login, comes back with its own MoneyMoney account
+    // (closed there) and the open Visa-Karte of the same comdirect login: only its own
+    // source moves it, but the Visa-Karte counts too, so the login is not all closed and
+    // the account follows the direct default
+    let v = vault();
+    import_with(&v, &fake_db(), |_| {});
+    let giro = account_by_name(&v, "Girokonto").id;
+    let other = {
+        let db = v.db().unwrap();
+        db.execute(
+            "INSERT INTO bank_connections(connector, display_name, login_name) VALUES ('fints', 'Andere', 'anders')",
+            [],
+        )
+        .unwrap();
+        let id = db.last_insert_rowid();
+        db.execute(
+            "UPDATE accounts SET connection_id = ?1 WHERE id = ?2",
+            params![id, giro],
+        )
+        .unwrap();
+        id
+    };
+    import_with(
+        &v,
+        &fake_db_with(false, "UPDATE accounts SET refresh = 19 WHERE rowid = 1;"),
+        |o| {
+            o.create_connections = true;
+            o.accounts.retain(|c| c.mm_id == 1 || c.mm_id == 2);
+            for c in o.accounts.iter_mut() {
+                c.target_account_id = Some(giro);
+            }
+        },
+    );
+    let now = account_by_id(&v, giro).connection_id;
+    assert_ne!(now, Some(other));
+    let login = v
+        .list_bank_connections()
+        .unwrap()
+        .into_iter()
+        .find(|c| Some(c.id) == now)
+        .unwrap();
+    assert_eq!(login.login_name, "1234567");
+}
+
+#[test]
 fn reimport_moves_accounts_to_the_connection_chosen_now() {
     // imported with the bank's own connection, imported again with Enable Banking before
     // the first fetch: the accounts follow, the new connection is not left empty

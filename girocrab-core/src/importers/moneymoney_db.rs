@@ -3060,9 +3060,9 @@ struct ImportCtx<'a> {
     files: Option<StatementFiles>,
     cat_cache: HashMap<String, i64>,
     res: MoneyMoneyDbImportResult,
-    /// (account id, MoneyMoney bank rowid, closed there) of the importer's own
-    /// accounts, linked to the bank's login once the connections exist
-    to_link: Vec<(i64, i64, bool)>,
+    /// (account id, MoneyMoney bank rowid, closed there, may move it to that login) of
+    /// the importer's own accounts, linked to the bank's login once the connections exist
+    to_link: Vec<(i64, i64, bool, bool)>,
     /// (MoneyMoney group rowid, uuid) of the groups this import creates
     created_groups: Vec<(i64, String)>,
 }
@@ -3168,8 +3168,8 @@ impl ImportCtx<'_> {
             r,
             !owned,
         )?);
-        if let (true, true, Some(bank)) = (owned, linkable, a.bank_key) {
-            self.to_link.push((account_id, bank, a.closed));
+        if let (true, Some(bank)) = (owned, a.bank_key) {
+            self.to_link.push((account_id, bank, a.closed, linkable));
         }
         Ok(())
     }
@@ -3361,12 +3361,18 @@ impl ImportCtx<'_> {
     /// Finds or creates the bank logins the user chose, then links the
     /// imported accounts and lists the Enable Banking connections.
     fn connect_banks(&mut self) -> CoreResult<()> {
-        // an account two sources from different logins went into links the first one
-        // only, or the other login would get a connection that stays empty; sources of
-        // that login all count (one of them open: the login is not all closed)
+        // an account several sources went into links the login of the first one that may
+        // move it, or another login would get a connection that stays empty; the other
+        // sources of that login all count, moving it or not (one of them open: the login
+        // is not all closed)
         let mut login_of = HashMap::new();
+        for (account, bank, _, moves) in &self.to_link {
+            if *moves {
+                login_of.entry(*account).or_insert(*bank);
+            }
+        }
         self.to_link
-            .retain(|(account, bank, _)| *login_of.entry(*account).or_insert(*bank) == *bank);
+            .retain(|(account, bank, _, _)| login_of.get(account) == Some(bank));
         let (conn, src, options) = (self.conn, self.src, self.options);
         // MoneyMoney bank rowid -> connection id
         let mut bank_connection: HashMap<i64, i64> = HashMap::new();
@@ -3375,7 +3381,7 @@ impl ImportCtx<'_> {
         // Only logins this import links an account to, or they would stay empty;
         // `true`: all of those accounts are closed in MoneyMoney (#1437)
         let mut logins: HashMap<i64, bool> = HashMap::new();
-        for (_, bank, closed) in &self.to_link {
+        for (_, bank, closed, _) in &self.to_link {
             *logins.entry(*bank).or_insert(true) &= *closed;
         }
         for b in src.banks.iter().filter(|b| logins.contains_key(&b.id)) {
@@ -3480,8 +3486,8 @@ impl ImportCtx<'_> {
     /// Shows imported accounts under their bank login right away; the first
     /// sync then takes them over (adopt_account) instead of adding new ones.
     fn link_accounts(&self, bank_connection: &HashMap<i64, i64>) -> CoreResult<()> {
-        for (account_id, bank, _) in &self.to_link {
-            if let Some(cid) = bank_connection.get(bank) {
+        for (account_id, bank, _, moves) in &self.to_link {
+            if let (true, Some(cid)) = (*moves, bank_connection.get(bank)) {
                 // an account still under the import's reference was never taken over by a
                 // fetch: it follows the way chosen now (a re-import may switch it), so a
                 // connection set up here never stays empty

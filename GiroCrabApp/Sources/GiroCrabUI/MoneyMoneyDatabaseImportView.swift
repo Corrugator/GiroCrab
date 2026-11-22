@@ -833,26 +833,29 @@ struct MoneyMoneyDatabaseImportView: View {
     /// going into a new account or one an earlier import owns. One merged into a bank-synced
     /// account still brings its bookings, but no connection for its login. "Neues Konto" goes
     /// where the core sends it: an earlier import or the bank account that one was folded into.
-    /// One already under a login is linked again only by its own MoneyMoney account.
+    /// One already under a login is moved only by its own MoneyMoney account.
     private func linkedAccounts(_ b: MoneyMoneyDbBank) -> [MoneyMoneyDbAccount] {
         let owned = Set(preview?.ownedAccountIds ?? [])
         let connected = Set(preview?.connectedAccountIds ?? [])
-        // an account several sources go into links the login of the first one only (import
-        // order); the other sources of that login count too
-        var loginOf: [Int64: Int64] = [:]
-        var linked: [MoneyMoneyDbAccount] = []
+        // (source, its login, target, may move the target to that login)
+        var planned: [(MoneyMoneyDbAccount, Int64, Int64?, Bool)] = []
         for a in preview?.accounts ?? [] {
             let c = binding(a).wrappedValue
             let target = c.target ?? a.reusedAccountId
             guard c.selected, let bank = a.mmBankId, target.map(owned.contains) ?? true else { continue }
-            if let target {
-                if connected.contains(target), target != a.reusedAccountId { continue }
-                if loginOf[target, default: bank] != bank { continue }
-                loginOf[target] = bank
-            }
-            if bank == b.mmId { linked.append(a) }
+            let moves = target.map { !connected.contains($0) || $0 == a.reusedAccountId } ?? true
+            planned.append((a, bank, target, moves))
         }
-        return linked
+        // an account several sources go into links the login of the first one that may move
+        // it (import order); the other sources of that login count too, moving it or not
+        var loginOf: [Int64: Int64] = [:]
+        for (_, bank, target, moves) in planned where moves {
+            if let target, loginOf[target] == nil { loginOf[target] = bank }
+        }
+        return planned.compactMap { a, bank, target, _ in
+            guard bank == b.mmId, target.map({ loginOf[$0] == bank }) ?? true else { return nil }
+            return a
+        }
     }
 
     /// Every account linked to the login is closed in MoneyMoney (#1437).

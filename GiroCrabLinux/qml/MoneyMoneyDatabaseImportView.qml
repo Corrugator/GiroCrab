@@ -219,24 +219,23 @@ ColumnLayout {
         if (!preview) return []
         const owned = preview.owned_account_ids || []
         const connected = preview.connected_account_ids || []
-        // an account several sources go into links the login of the first one only (import
-        // order); the other sources of that login count too. One already under a login is
-        // linked again only by its own MoneyMoney account.
-        const loginOf = new Map()
-        const linked = []
+        // One already under a login is moved only by its own MoneyMoney account.
+        const planned = []
         for (const a of preview.accounts) {
             const c = choice(a)
             const t = c.target === null || c.target === undefined ? a.reused_account_id : c.target
             const isNew = t === null || t === undefined
             if (!c.selected || a.mm_bank_id === null || a.mm_bank_id === undefined || !(isNew || owned.includes(t))) continue
-            if (!isNew) {
-                if (connected.includes(t) && t !== a.reused_account_id) continue
-                if (loginOf.has(t) && loginOf.get(t) !== a.mm_bank_id) continue
-                loginOf.set(t, a.mm_bank_id)
-            }
-            if (a.mm_bank_id === b.mm_id) linked.push(a)
+            planned.push({ a: a, t: isNew ? null : t, moves: isNew || !connected.includes(t) || t === a.reused_account_id })
         }
-        return linked
+        // an account several sources go into links the login of the first one that may move
+        // it (import order); the other sources of that login count too, moving it or not
+        const loginOf = new Map()
+        for (const p of planned) {
+            if (p.moves && p.t !== null && !loginOf.has(p.t)) loginOf.set(p.t, p.a.mm_bank_id)
+        }
+        return planned.filter(p => p.a.mm_bank_id === b.mm_id && (p.t === null || loginOf.get(p.t) === b.mm_id))
+                      .map(p => p.a)
     }
     /// Every account linked to the login is closed in MoneyMoney (#1437).
     function allClosed(b) { const a = linkedAccounts(b); return a.length > 0 && a.every(x => x.closed) }
