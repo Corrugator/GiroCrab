@@ -1395,10 +1395,11 @@ impl MerchantRules {
         // "PAYPAL *HAENDLER 1234567890" on card statements (#243): a shop the
         // dictionary doesn't know is still named right behind the `*`. A purpose that
         // repeats the counterparty names the processor again (Advanzia, #1659): it
-        // must not win over the shop a second time, so the shop is then resolved alone.
+        // must not win over the shop a second time, so the shop is then resolved alone
+        // (not again without a purpose: nested processors would double the work).
         behind_processor(counterparty).map(|shop| {
             let found = self.resolve_uncached(&shop, purpose);
-            if found.kind == K::PaymentService {
+            if found.kind == K::PaymentService && !purpose.is_empty() {
                 self.resolve_uncached(&shop, "")
             } else {
                 found
