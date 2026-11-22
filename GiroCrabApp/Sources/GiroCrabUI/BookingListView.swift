@@ -26,8 +26,15 @@ struct BookingStreamView: View {
         ScrollViewReader { proxy in
             VStack(spacing: 0) {
                 // Security lock: first, above everything else (stays visible).
-                BankingPolicyBanner()
-                AnnouncementBanner()
+                // Outside the ScrollView like the header: they end where the cards below end, not
+                // under the scroll bar (#1535).
+                VStack(spacing: 0) {
+                    BankingPolicyBanner()
+                    AnnouncementBanner()
+                }
+                #if os(macOS)
+                .padding(.trailing, scrollerInset)
+                #endif
                 if let focus = model.merchantFocus {
                     MerchantFocusBar(focus: focus)
                 }
