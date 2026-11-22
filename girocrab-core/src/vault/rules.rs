@@ -121,6 +121,7 @@ impl Vault {
         conn: &Connection,
         rules: &[Rule],
         rule_id: i64,
+        category_ms: i64,
     ) -> CoreResult<HashSet<i64>> {
         let owned: HashSet<i64> = conn
             .prepare(&format!(
@@ -140,7 +141,16 @@ impl Vault {
                 .cloned()
                 .collect(),
         )?;
-        Self::categorise_by_rules(conn, &category_rules, false, Some(&owned))
+        let changed = Self::categorise_by_rules(conn, &category_rules, false, Some(&owned))?;
+        // An explicit application supersedes older manual edits during sync.
+        if !changed.is_empty() {
+            conn.execute(
+                "UPDATE transactions SET category_ms = MAX(category_ms, ?1)
+                 WHERE id IN (SELECT value FROM json_each(?2))",
+                params![category_ms, serde_json::to_string(&changed)?],
+            )?;
+        }
+        Ok(changed)
     }
 
     /// `only`: restricts the run to these bookings. Returns the bookings whose
@@ -367,10 +377,11 @@ impl Vault {
         let db = self.db()?;
         let tx = db.unchecked_transaction()?;
         let rules = Self::load_rules(&tx)?;
+        let now = crate::dates::now_ms();
         let mut changed = if only_uncategorized {
             HashSet::new()
         } else {
-            Self::refresh_rule_categories(&tx, &rules, rule_id)?
+            Self::refresh_rule_categories(&tx, &rules, rule_id, now)?
         };
         let Some(index) = rules
             .iter()
@@ -430,10 +441,9 @@ impl Vault {
                     matching.push(row.get(0)?);
                 }
             }
-            let now = crate::dates::now_ms();
             let mut update = tx.prepare(
                 "UPDATE transactions SET category_id = ?1, rule_id = ?2, category_source = 'rule',
-                 category_ms = ?3 WHERE id = ?4",
+                 category_ms = MAX(category_ms, ?3) WHERE id = ?4",
             )?;
             for id in matching {
                 update.execute(params![category_id, rule_id, now, id])?;
@@ -935,7 +945,8 @@ mod apply_rule_tests {
                     (1, 'fallback', '2026-01-02', -100, 'Demo Fallback', 1, 'rule', 1),
                     (1, 'manual', '2026-01-02', -100, 'Demo Fallback', 1, 'manual', NULL),
                     (1, 'unrelated', '2026-01-02', -100, 'Fallback', NULL, 'none', NULL),
-                    (1, 'new-match', '2026-01-02', -100, 'Other', NULL, 'none', NULL);",
+                    (1, 'new-match', '2026-01-02', -100, 'Other', NULL, 'none', NULL);
+             UPDATE transactions SET category_ms = 200 WHERE external_id != 'new-match';",
             )
             .unwrap();
         let assignment = |id: &str| -> (Option<i64>, Option<i64>) {
@@ -949,6 +960,17 @@ mod apply_rule_tests {
                 )
                 .unwrap()
         };
+        let stamp = |id: &str| -> i64 {
+            vault
+                .db()
+                .unwrap()
+                .query_row(
+                    "SELECT category_ms FROM transactions WHERE external_id = ?1",
+                    [id],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
         let mut rule = vault.list_rules().unwrap().remove(0);
         rule.pattern = "Other".into();
         vault.save_rule(rule.clone()).unwrap();
@@ -956,13 +978,27 @@ mod apply_rule_tests {
         assert_eq!(vault.apply_rule(1, true).unwrap(), 1);
         assert_eq!(assignment("obsolete"), (Some(1), Some(1)));
         assert_eq!(assignment("fallback"), (Some(1), Some(1)));
+        assert_eq!(stamp("obsolete"), 200);
+        assert_eq!(stamp("fallback"), 200);
+        let new_match_stamp = stamp("new-match");
         assert_eq!(vault.apply_rule(1, false).unwrap(), 2);
         assert_eq!(assignment("obsolete"), (None, None));
         assert_eq!(assignment("fallback"), (Some(2), Some(2)));
         assert_eq!(assignment("manual"), (Some(1), None));
         assert_eq!(assignment("unrelated"), (None, None));
         assert_eq!(assignment("new-match"), (Some(1), Some(1)));
+        let refresh_stamp = stamp("obsolete");
+        assert!(
+            refresh_stamp > 250,
+            "supersedes an older manual edit from another device"
+        );
+        assert_eq!(stamp("fallback"), refresh_stamp);
+        assert_eq!(stamp("manual"), 200);
+        assert_eq!(stamp("unrelated"), 200);
+        assert_eq!(stamp("new-match"), new_match_stamp);
         assert_eq!(vault.apply_rule(1, false).unwrap(), 0);
+        assert_eq!(stamp("fallback"), refresh_stamp);
+        assert_eq!(stamp("new-match"), new_match_stamp);
 
         rule.enabled = false;
         vault.save_rule(rule).unwrap();
