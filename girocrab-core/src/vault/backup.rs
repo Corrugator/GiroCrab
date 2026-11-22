@@ -235,7 +235,28 @@ impl Vault {
         self.data_replaced();
         copied?;
         Self::migrate(&mut main)?;
+        Self::restored_life_wins(&main)?;
         Self::repair(&main);
+        Ok(())
+    }
+
+    /// A restore says "this state counts" (#1090): the backup's live bank
+    /// connections and accounts are created again now, so the sync merge
+    /// (`join_life`) keeps them against a deletion another device made after
+    /// the backup and brings them back there too. Their bookings deleted with
+    /// them follow the account (cascade tombstones). Deletions made after the
+    /// restore are newer and win as usual. Individually deleted bookings,
+    /// categories, rules and tags have no creation stamp and stay deleted.
+    fn restored_life_wins(conn: &Connection) -> CoreResult<()> {
+        let now = crate::dates::now_ms();
+        conn.execute(
+            "UPDATE bank_connections SET created_ms = ?1 WHERE deleted_ms IS NULL AND created_ms < ?1",
+            [now],
+        )?;
+        conn.execute(
+            "UPDATE accounts SET created_ms = ?1 WHERE deleted_ms IS NULL AND created_ms < ?1",
+            [now],
+        )?;
         Ok(())
     }
 }

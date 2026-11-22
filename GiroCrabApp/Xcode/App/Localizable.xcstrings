@@ -30650,6 +30650,17 @@
         }
       }
     },
+    "Tresor aus der Sicherung wiederhergestellt. Der iCloud-Abgleich überträgt diesen Stand jetzt auf Ihre anderen Geräte." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vault restored from the backup. iCloud Sync now brings this state to your other devices."
+          }
+        }
+      }
+    },
     "Tresor entsperren" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -45,8 +45,11 @@ extension AppModel {
         }
         // also from the demo an empty vault shows on a new device
         useVault(v, demo: false)
-        syncNow()
-        toast = String(localized: "Tresor aus der Sicherung wiederhergestellt")
+        // The restored state wins in the merge (#1090) and goes to the other
+        // devices with this sync; say so instead of syncing silently.
+        toast = syncNow()
+            ? String(localized: "Tresor aus der Sicherung wiederhergestellt. Der iCloud-Abgleich überträgt diesen Stand jetzt auf Ihre anderen Geräte.")
+            : String(localized: "Tresor aus der Sicherung wiederhergestellt")
         return true
     }
 }
