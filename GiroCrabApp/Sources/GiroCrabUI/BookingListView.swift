@@ -336,7 +336,7 @@ private struct StreamAnalysisCards: View {
                 }
                 .appFont(.subheadline, weight: .medium)
                 .flatSection(horizontal: 14, vertical: 6)
-            } else if cards.budgets {
+            } else {
                 BudgetProgressCard()
             }
             #else
@@ -430,13 +430,8 @@ struct MerchantFocusBar: View {
     }
 }
 
-/// The stream is one flat run of rows: no rounded day cards, no strokes. The
-/// `isTop`/`isBottom` flags are kept because callers pass a day's first and
-/// last row, but the layout no longer needs them.
+/// The stream is one flat run of rows: no rounded day cards, no strokes.
 struct DayCardSegment: ViewModifier {
-    let isTop: Bool
-    let isBottom: Bool
-
     func body(content: Content) -> some View {
         content.frame(maxWidth: .infinity)
     }
@@ -477,7 +472,7 @@ struct DayHeader: View {
             .background(marked ? Theme.accent.opacity(0.12) : Color.clear)
             Divider()
         }
-        .modifier(DayCardSegment(isTop: true, isBottom: false))
+        .modifier(DayCardSegment())
     }
 }
 
@@ -605,7 +600,7 @@ struct DayCardRow: View {
                     .padding(.leading, density == .compact ? 12 : 48)
             }
         }
-        .modifier(DayCardSegment(isTop: false, isBottom: isLast))
+        .modifier(DayCardSegment())
         .onChange(of: model.selectedBookingID) { _, id in
             if id != booking.id { compactDetailsCollapsed = false }
         }

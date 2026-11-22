@@ -31,8 +31,14 @@ struct MandateInspector: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .flatSection()
                 Divider()
-                returnsCard(m)
-                bookingsCard
+                if model.openReturns(of: m).first != nil {
+                    returnsCard(m)
+                    Divider()
+                }
+                if !model.mandateBookings.isEmpty {
+                    bookingsCard
+                    Divider()
+                }
                 HStack {
                     Button("Bearbeiten …", systemImage: "pencil") { model.editMandate(m) }
                     Button(m.active ? "Deaktivieren" : "Aktivieren", systemImage: m.active ? "pause.circle" : "play.circle") {
@@ -75,7 +81,6 @@ struct MandateInspector: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .flatSection()
-            .overlay(alignment: .bottom) { Divider() }
         }
     }
 
@@ -98,7 +103,6 @@ struct MandateInspector: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .flatSection()
-            .overlay(alignment: .bottom) { Divider() }
         }
     }
 

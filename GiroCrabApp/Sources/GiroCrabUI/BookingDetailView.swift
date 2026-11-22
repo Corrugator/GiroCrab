@@ -81,10 +81,15 @@ struct InspectorView: View {
     }
 
     private func visibleSections(for booking: Booking) -> [InspectorSection] {
+        let sections: [InspectorSection]
         if revealedNoteBookingID == booking.id, layout.hidden.contains(.note) {
-            return layout.visible + [.note]
+            sections = layout.visible + [.note]
+        } else {
+            sections = layout.visible
         }
-        return layout.visible
+        // The salary card renders nothing for an outflow. Skip the section so the
+        // flat list does not show a divider with no content below it.
+        return sections.filter { $0 != .salary || booking.amountCents > 0 }
     }
 
     /// The single-booking cards are shown, so their layout can be edited.
