@@ -100,8 +100,10 @@ extension AppModel {
     /// logins keep theirs. Both empty: back to the default application.
     func setConnectionEnableBankingApp(_ id: Int64, applicationID: String, pem: String) {
         guard let vault else { return }
-        var changed = false
+        var changed: Bool?
         runCore { changed = try vault.setConnectionEnableBankingApp(connectionId: id, applicationId: applicationID, privateKeyPem: pem) }
+        // not saved (e.g. a key that cannot sign): nothing to share, a conflict stays open
+        guard let changed else { return }
         if changed {
             toast = String(localized: "Anwendung für diesen Bankzugang gespeichert. Beim nächsten Abruf ist eine neue Zustimmung nötig.")
             syncEnableBankingLogins(.force(id))
