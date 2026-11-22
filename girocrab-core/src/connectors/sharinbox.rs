@@ -3,6 +3,8 @@
 //! The portal is the only interface (no FinTS/PSD2), see `docs/sharinbox-connector.md`.
 use std::{collections::HashSet, sync::Arc};
 
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use rusqlite::{OptionalExtension, params};
 use serde_json::Value;
 
 use super::{FetchResult, RemoteAccount, RemoteHolding, SyncSummary};
@@ -172,6 +174,127 @@ impl Vault {
     }
 }
 
+impl Vault {
+    fn check_sharinbox(&self, connection_id: i64) -> CoreResult<()> {
+        if self.portal_connection(connection_id)?.0 != ConnectorKind::Sharinbox {
+            return Err(invalid());
+        }
+        crate::banking_gate::check_connector("sharinbox")
+    }
+}
+
+/// Stable per connection and document; no session state is part of it.
+fn document_source(connection_id: i64, id: &str) -> String {
+    format!("sharinbox:{connection_id}:{}", URL_SAFE_NO_PAD.encode(id))
+}
+
+/// The portal identifies a document by a UUID (`8-4-4-4-12` hex digits). It ends up in the
+/// download address, so nothing else is accepted.
+///
+/// On failure the error names the field, never its content.
+fn document_id(doc: &Value) -> Result<String, &'static str> {
+    let id = doc["id"].as_str().ok_or("id")?;
+    let groups: Vec<&str> = id.split('-').collect();
+    let shape = [8, 4, 4, 4, 12];
+    let ok = groups.len() == shape.len()
+        && groups
+            .iter()
+            .zip(shape)
+            .all(|(g, n)| g.len() == n && g.bytes().all(|b| b.is_ascii_hexdigit()));
+    if ok {
+        Ok(id.to_ascii_lowercase())
+    } else {
+        Err("id")
+    }
+}
+
+/// A document the core rejects: which entry (1-based) and which field, no content.
+fn document_error(index: usize, field: &str) -> CoreError {
+    CoreError::InvalidInput {
+        message: crate::i18n::trf(
+            "Sharinbox: Dokument {0} abgelehnt, Feld {1} ungültig.",
+            &[&(index + 1), &field],
+        ),
+    }
+}
+
+#[uniffi::export]
+impl Vault {
+    /// Only returns unknown documents; a PDF is stored once per connection and document.
+    pub fn pending_sharinbox_documents(
+        self: Arc<Self>,
+        connection_id: i64,
+        documents_json: String,
+    ) -> CoreResult<Vec<String>> {
+        self.check_sharinbox(connection_id)?;
+        // document retrieval switched off for this connection: nothing to download
+        if !super::documents_fetch_on(&*self.db()?, connection_id)? {
+            return Ok(Vec::new());
+        }
+        let docs: Vec<Value> = serde_json::from_str(&documents_json).map_err(|_| invalid())?;
+        let db = self.db()?;
+        let mut seen = HashSet::new();
+        let mut pending = Vec::new();
+        for (index, doc) in docs.into_iter().enumerate() {
+            let id = document_id(&doc).map_err(|f| document_error(index, f))?;
+            date(&doc, "sentDate").map_err(|_| document_error(index, "sentDate"))?;
+            if seen.insert(id.clone())
+                && !db.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM booking_documents WHERE source_url=?1)",
+                    [document_source(connection_id, &id)],
+                    |r| r.get::<_, bool>(0),
+                )?
+            {
+                pending.push(doc.to_string());
+            }
+        }
+        Ok(pending)
+    }
+
+    /// Stores one PDF at the securities account of the connection.
+    pub fn import_sharinbox_document(
+        self: Arc<Self>,
+        connection_id: i64,
+        document_json: String,
+        bytes: Vec<u8>,
+    ) -> CoreResult<bool> {
+        self.check_sharinbox(connection_id)?;
+        if !bytes.starts_with(b"%PDF-") {
+            return Err(invalid());
+        }
+        let doc: Value = serde_json::from_str(&document_json).map_err(|_| invalid())?;
+        let id = document_id(&doc).map_err(|_| invalid())?;
+        let sent = date(&doc, "sentDate")?;
+        let title = doc["subject"]
+            .as_str()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("Sharinbox-Dokument");
+        let db = self.db()?;
+        let account_id: i64 = db
+            .query_row(
+                "SELECT id FROM accounts WHERE connection_id=?1 AND deleted_ms IS NULL AND external_ref=?2",
+                params![connection_id, ACCOUNT_REF],
+                |r| r.get(0),
+            )
+            .optional()?
+            .ok_or_else(invalid)?;
+        Ok(crate::documents::insert_doc(
+            &db,
+            None,
+            Some(account_id),
+            title,
+            "postbox",
+            "application/pdf",
+            &format!("sharinbox_{id}.pdf"),
+            &bytes,
+            &document_source(connection_id, &id),
+            &sent,
+        )?
+        .is_some())
+    }
+}
+
 /// Placeholder connector: the login and the page reads run in the embedded browser.
 pub struct WebOnlyConnector;
 
@@ -312,6 +435,126 @@ mod tests {
                 .unwrap();
             assert_eq!(s.accounts_updated, 1);
         }
+    }
+
+    const DOC_A: &str = "0a1b2c3d-1111-4222-8333-444455556666";
+    const DOC_B: &str = "0a1b2c3d-1111-4222-8333-444455557777";
+
+    fn document(id: &str) -> Value {
+        json!({"id":id,"sentDate":"2026-11-10","subject":"Transaktionsmitteilung Wertpapiere"})
+    }
+
+    fn vault_with_depot(name: &str) -> (crate::test_support::TempDir, Arc<Vault>, i64) {
+        let dir = crate::test_support::TempDir::new(name);
+        let vault =
+            Vault::open(dir.join("vault.db").to_string_lossy().into(), vec![7; 32]).unwrap();
+        let connection = vault
+            .add_bank_connection(ConnectorKind::Sharinbox, "Test".into(), "x".into())
+            .unwrap();
+        vault
+            .clone()
+            .import_sharinbox_snapshot(connection, fixture().to_string())
+            .unwrap();
+        (dir, vault, connection)
+    }
+
+    #[test]
+    fn documents_are_stored_once_at_the_depot() {
+        let (_dir, vault, connection) = vault_with_depot("sharinbox-docs");
+        let doc = document(DOC_A).to_string();
+        let pending = |list: String| {
+            vault
+                .clone()
+                .pending_sharinbox_documents(connection, list)
+                .unwrap()
+        };
+        // the same document twice in one list is reported once
+        assert_eq!(pending(format!("[{doc},{doc}]")).len(), 1);
+        let pdf = b"%PDF-1.7 synthetic".to_vec();
+        assert!(
+            vault
+                .clone()
+                .import_sharinbox_document(connection, doc.clone(), pdf.clone())
+                .unwrap()
+        );
+        // a second import and a second listing add nothing
+        assert!(
+            !vault
+                .clone()
+                .import_sharinbox_document(connection, doc.clone(), pdf.clone())
+                .unwrap()
+        );
+        assert!(pending(format!("[{doc}]")).is_empty());
+        // another document is new; the id is compared in lower case
+        let other = document(&DOC_B.to_uppercase()).to_string();
+        assert_eq!(pending(format!("[{doc},{other}]")).len(), 1);
+        let stored = vault
+            .list_all_documents(crate::documents::DocumentFilter::default())
+            .unwrap();
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].title, "Transaktionsmitteilung Wertpapiere");
+    }
+
+    #[test]
+    fn documents_reject_bad_ids_dates_and_files() {
+        let (_dir, vault, connection) = vault_with_depot("sharinbox-docs-bad");
+        for id in [
+            "",
+            "../1",
+            "0a1b2c3d-1111-4222-8333",
+            "zzzzzzzz-1111-4222-8333-444455556666",
+        ] {
+            let list = json!([document(id)]).to_string();
+            let err = vault
+                .clone()
+                .pending_sharinbox_documents(connection, list)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("Dokument 1") && err.contains("id"), "{err}");
+            assert!(!err.contains(id) || id.is_empty());
+        }
+        let mut d = document(DOC_A);
+        d["sentDate"] = json!("gestern");
+        let err = vault
+            .clone()
+            .pending_sharinbox_documents(connection, json!([d]).to_string())
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("sentDate"), "{err}");
+        // not a PDF
+        assert!(
+            vault
+                .clone()
+                .import_sharinbox_document(
+                    connection,
+                    document(DOC_A).to_string(),
+                    b"<html>login</html>".to_vec()
+                )
+                .is_err()
+        );
+        // empty subject: still a document
+        let mut d = document(DOC_B);
+        d["subject"] = json!(" ");
+        assert!(
+            vault
+                .clone()
+                .import_sharinbox_document(connection, d.to_string(), b"%PDF-1.7 x".to_vec())
+                .unwrap()
+        );
+        let stored = vault
+            .list_all_documents(crate::documents::DocumentFilter::default())
+            .unwrap();
+        assert_eq!(stored[0].title, "Sharinbox-Dokument");
+        // another connector kind may not use the calls
+        let other = vault
+            .add_bank_connection(ConnectorKind::Quirion, "Andere".into(), "x".into())
+            .unwrap();
+        assert!(
+            vault
+                .clone()
+                .pending_sharinbox_documents(other, "[]".into())
+                .is_err()
+        );
     }
 
     #[test]

@@ -10,8 +10,8 @@ the **Sharinbox** portal. Sign in through **Add bank → Sharinbox (Société G�
 (SG Connect: e-mail, password and authenticator app) happens in the embedded browser. After
 login, choose **Bestand abrufen**.
 
-This first version reads the **number of shares and their value** from the portal's start
-page. The mailbox (PDF documents) is planned as a separate step.
+The connector reads the **number of shares and their value** from the portal's start page and,
+optionally, the **PDF documents** of the document list ("Meine Dokumente").
 
 ## What is imported
 
@@ -21,6 +21,11 @@ page. The mailbox (PDF documents) is planned as a separate step.
 - Share rights (Aktienrechte) are not imported.
 - The portal shows no purchase price, so no profit or loss is derived.
 - Only EUR is accepted; anything else is rejected rather than guessed.
+- Documents: every entry of the portal's document list (statements, transaction notices,
+  purchase letters and also the general plan rules, flyers and newsletters). A PDF is stored once
+  per document at the securities account; a second fetch loads only new ones. The switch
+  "PDF-Postbox abrufen" in the browser window and "Dokumente abrufen" of the connection turn
+  this off.
 
 ## Browser flow and technical validation
 
@@ -34,6 +39,11 @@ The generic portal traffic recorder is disabled for this connector.
 Consistency checks before anything is stored: ISINs must be well formed and unique, the
 price date a valid date, and each value must match quantity × price (the page shows the price
 with three decimals). A failed check imports nothing.
+
+Documents: the page script reads the list page (`/SharinBox/documentationAcces.do`): title, date and
+document ID per entry. The ID must be a UUID because it is part of the download address
+(`/SharinBox/sgdocs/download.do?idSgdocs=<ID>`); a file counts only if it starts with `%PDF-`.
+Whether opening a document marks it as read in the portal has not been verified.
 
 ## Limits
 

@@ -25578,6 +25578,17 @@
         }
       }
     },
+    "PDF-Postbox abrufen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fetch PDF mailbox"
+          }
+        }
+      }
+    },
     "PDF-Postbox inkl. Archiv" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -26262,6 +26273,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Postbox"
+          }
+        }
+      }
+    },
+    "Postbox auflisten …" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listing the mailbox …"
           }
         }
       }
@@ -28204,13 +28226,13 @@
         }
       }
     },
-    "Sharinbox: %u Depot aktualisiert." : {
+    "Sharinbox: %u Depot aktualisiert, %lld neue PDFs." : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sharinbox: %u depot updated."
+            "value" : "Sharinbox: %u depot updated, %lld new PDFs."
           }
         }
       }

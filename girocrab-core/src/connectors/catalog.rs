@@ -133,7 +133,7 @@ pub fn descriptor(kind: ConnectorKind) -> BankDescriptor {
             login_label: tr("Zugangsbezeichnung").into(),
             secret_label: tr("(Anmeldung im Browser-Fenster)").into(),
             required_settings: vec![],
-            note: tr("Sharinbox (Société Générale): Mitarbeiteraktien mit Stückzahl und Wert. Anmeldung im Browserfenster mit E-Mail, Passwort und Authenticator-App. Interne Portal-Seiten; Änderungen sind möglich.").into(),
+            note: tr("Sharinbox (Société Générale): Mitarbeiteraktien mit Stückzahl und Wert, optional die PDF-Dokumente aus der Postbox. Anmeldung im Browserfenster mit E-Mail, Passwort und Authenticator-App. Interne Portal-Seiten; Änderungen sind möglich.").into(),
         },
         ConnectorKind::Easybank => BankDescriptor {
             kind,
@@ -835,7 +835,11 @@ pub const BANK_MATRIX: &[MatrixEntry] = &[
         kind: Some(ConnectorKind::Sharinbox),
         interface: Interface::WebPortal,
         official: Some(false),
-        capabilities: &[Capability::Balances, Capability::Securities],
+        capabilities: &[
+            Capability::Balances,
+            Capability::Securities,
+            Capability::Documents,
+        ],
         status: Status::TestingWanted,
         issues: &[],
     },

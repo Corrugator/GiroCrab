@@ -6,7 +6,8 @@ const vm = require('node:vm');
 const source = readFileSync(new URL('../GiroCrabApp/Sources/GiroCrabUI/SharinboxUI.swift', `file://${__filename}`), 'utf8');
 const hook = source.match(/static let hook = #"""\n([\s\S]*?)\n    """#/)[1];
 const pageOrigin = 'https://sharinbox.sgmarkets.com';
-const response = (text, status=200) => ({ok: status >= 200 && status < 300, status, text: async () => text});
+const response = (text, status=200) => ({ok: status >= 200 && status < 300, status, text: async () => text,
+  arrayBuffer: async () => Uint8Array.from(Buffer.from(text)).buffer});
 
 // Same structure as the portal's start page: one block per security, then the share rights.
 const block = (isin, name, price, free, blocked) => `
@@ -30,6 +31,15 @@ const home = (...blocks) => '<html><body><h4>Wertpapiere</h4>' + blocks.join('')
 const standard = home(block('FR0000000001', 'Test AG', '45,140 (EUR)', ['16.290', '735.330,60 EUR'], ['-', '-']));
 
 // `shown` is the HTML the user currently sees (the portal may render it in a frame).
+// The document list: one <li> per document with title, category badge and date.
+const ID_A = '0a1b2c3d-1111-4222-8333-444455556666', ID_B = '0a1b2c3d-1111-4222-8333-444455557777';
+const entry = (id, label, date) => `<li> <div class="doc" data-category="" data-filter="x"> <div class="doc-icon">
+  <a href="/SharinBox/sgdocs/download.do?idSgdocs=${id}"><em class="fa fa-download fa-3x"></em></a></div>
+  <div class="doc-info"> <div class="doc-label"> ${label} </div> <div class="doc-badges"><span class="badge">Legal</span></div> </div>
+  <div class="doc-date"> <em>${date}</em> </div></div> </li>`;
+const list = (...entries) => '<html><ul id="documents-documentation" class="list-doc">' + entries.join('') + '</ul></html>';
+const downloadPath = id => '/SharinBox/sgdocs/download.do?idSgdocs=' + id;
+
 function page(fetch, {origin=pageOrigin, shown=''} = {}) {
   const window = {};
   const document = {documentElement:{outerHTML:shown}, querySelectorAll: () => []};
@@ -51,7 +61,7 @@ test('collects the share, its price and value; nothing else crosses', async () =
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, '/SharinBox/connexion.do');
   assert.equal(calls[0].options.credentials, 'same-origin');
-  assert.equal(calls[0].options.redirect, 'error');
+  assert.equal(calls[0].options.mode, 'same-origin');
   assert.equal(calls[0].options.method, 'GET');
 });
 
@@ -91,4 +101,36 @@ test('unknown number formats and mixed currencies are rejected', async () => {
 test('the script stays inactive outside the portal origin', async () => {
   const w = page(async () => response(standard), {origin:'https://example.org'});
   assert.equal(w.__gcSharinbox, undefined);
+});
+
+test('lists the documents with title, date and download path', async () => {
+  const calls = [];
+  const w = page(async (url, options) => { calls.push({url, options});
+    return response(list(entry(ID_A, 'Auszug Gratisaktien', '15.01.2026'), entry(ID_B.toUpperCase(), 'Portfolioauszug', '03.02.2026'),
+      entry(ID_A, 'Auszug Gratisaktien', '15.01.2026'))); });
+  const docs = JSON.parse(await w.__gcSharinbox.documents());
+  assert.deepEqual(docs, [
+    {id:ID_A, sentDate:'2026-01-15', subject:'Auszug Gratisaktien', path:downloadPath(ID_A)},
+    {id:ID_B, sentDate:'2026-02-03', subject:'Portfolioauszug', path:downloadPath(ID_B)}]);
+  assert.equal(calls[0].url, '/SharinBox/documentationAcces.do');
+  assert.equal(calls[0].options.credentials, 'same-origin');
+  assert.equal(calls[0].options.mode, 'same-origin');
+});
+
+test('odd list entries and other pages are errors that name shapes only', async () => {
+  const odd = list(entry(ID_A, 'Ok', '15.01.2026'), entry('not-an-id', 'Geheim', '15.01.2026'), entry(ID_B, 'Ohne', 'bald'));
+  await assert.rejects(page(async () => response(odd)).__gcSharinbox.documents(),
+    err => /ohne gültige ID/.test(err.message) && /ohne Datum/.test(err.message) && !/Geheim|not-an-id/.test(err.message));
+  await assert.rejects(page(async () => response('<html>Login</html>')).__gcSharinbox.documents(), /Keine Dokumentenliste/);
+  await assert.rejects(page(async () => response('', 500)).__gcSharinbox.documents(), /HTTP 500/);
+});
+
+test('downloads a PDF only for a valid path and only if it is one', async () => {
+  const calls = [];
+  const w = page(async (url, options) => { calls.push(url); return response(url.includes(ID_B) ? '<html>login</html>' : '%PDF-1.7 synthetic'); });
+  assert.equal(Buffer.from(await w.__gcSharinbox.pdf(downloadPath(ID_A)), 'base64').toString(), '%PDF-1.7 synthetic');
+  await assert.rejects(w.__gcSharinbox.pdf(downloadPath(ID_B)), /kein PDF/);
+  for (const bad of ['/SharinBox/connexion.do', '/SharinBox/sgdocs/download.do?idSgdocs=../x', 'https://example.org/x.pdf', 42])
+    await assert.rejects(w.__gcSharinbox.pdf(bad), /Ungültiger Dokumentpfad/);
+  assert.deepEqual(calls, [downloadPath(ID_A), downloadPath(ID_B)]);
 });

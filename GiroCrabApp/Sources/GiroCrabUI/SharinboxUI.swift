@@ -66,16 +66,52 @@ enum SharinboxScripts {
         try { for (const f of document.querySelectorAll('iframe')) add(f.contentDocument); } catch {}
         return out.filter(hasOverview);
       };
-      const fetched = async () => {
+      const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const DOCS = '/SharinBox/documentationAcces.do';
+      const DOWNLOAD = /^\/SharinBox\/sgdocs\/download\.do\?idSgdocs=([0-9a-f-]{36})$/i;
+      // Same-origin GET with the session; the deadline holds until the body is read.
+      const request = async (path, accept, read) => {
+        if (location.origin !== pageOrigin) fail('Bitte erneut anmelden.');
+        if (path !== HOME && path !== DOCS && !(DOWNLOAD.test(path) && UUID.test(DOWNLOAD.exec(path)[1])))
+          fail('Ungültiger Abruf.');
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 30000);
         try {
-          const r = await fetch(HOME, {method: 'GET', credentials: 'same-origin', redirect: 'error',
-            headers: {'Accept': 'text/html'}, signal: controller.signal});
-          if (!r.ok) return {status: r.status};
-          const html = await r.text();
-          return hasOverview(html) ? {html} : {status: 0};
-        } catch { return {status: 0}; } finally { clearTimeout(timeout); }
+          const r = await fetch(path, {method: 'GET', credentials: 'same-origin', mode: 'same-origin',
+            headers: {'Accept': accept}, signal: controller.signal});
+          if (!r.ok) throw {status: r.status};
+          return await read(r);
+        } finally { clearTimeout(timeout); }
+      };
+      const page = async path => {
+        try { return {html: await request(path, 'text/html', r => r.text())}; }
+        catch (e) { return {status: e && e.status ? e.status : 0}; }
+      };
+      const base64 = bytes => {
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        return btoa(binary);
+      };
+      // one entry per document: title, date and ID (titles only; nothing else of the page)
+      const parseDocuments = html => {
+        const docs = new Map();
+        const problems = new Map();
+        const problem = reason => problems.set(reason, (problems.get(reason) || 0) + 1);
+        const entry = /<li>\s*<div class="doc"[\s\S]*?<\/li>/g;
+        let m;
+        while ((m = entry.exec(html))) {
+          const id = /download\.do\?idSgdocs=([0-9a-fA-F-]{36})/.exec(m[0]);
+          const date = /<div class="doc-date">\s*<em>\s*(\d{2})\.(\d{2})\.(\d{4})\s*<\/em>/.exec(m[0]);
+          const label = /doc-label">([\s\S]*?)<\/div>/.exec(m[0]);
+          if (!id || !UUID.test(id[1])) { problem('ohne gültige ID'); continue; }
+          if (!date) { problem('ohne Datum'); continue; }
+          const key = id[1].toLowerCase();
+          if (!docs.has(key)) docs.set(key, {id: key, sentDate: date[3] + '-' + date[2] + '-' + date[1],
+            subject: strip(label && label[1]).slice(0, 200), path: '/SharinBox/sgdocs/download.do?idSgdocs=' + key});
+        }
+        if (problems.size > 0)
+          fail(('Unbekanntes Dokumentformat: ' + [...problems].map(([r, n]) => n + '× ' + r).join(', ')).slice(0, 150));
+        return [...docs.values()];
       };
       window.__gcSharinbox = {
         // signed in: the overview is on screen
@@ -83,10 +119,24 @@ enum SharinboxScripts {
         collect: async () => {
           if (location.origin !== pageOrigin) fail('Bitte erneut anmelden.');
           // a fresh copy of the start page; otherwise what is on screen
-          const got = await fetched();
-          const html = got.html || shown()[0];
+          const got = await page(HOME);
+          const html = got.html && hasOverview(got.html) ? got.html : shown()[0];
           if (!html) fail(got.status ? 'Abruf fehlgeschlagen (HTTP ' + got.status + '). Bitte erneut anmelden.' : 'Keine Bestandsübersicht erkannt. Bitte erneut anmelden.');
           return JSON.stringify({version: 1, asOf: new Date().toISOString().slice(0, 10), depot: {items: parse(html)}});
+        },
+        documents: async () => {
+          const got = await page(DOCS);
+          if (!got.html) fail(got.status ? 'Dokumentenliste nicht abrufbar (HTTP ' + got.status + ').' : 'Dokumentenliste nicht abrufbar.');
+          if (!got.html.includes('documents-documentation')) fail('Keine Dokumentenliste erkannt. Bitte erneut anmelden.');
+          return JSON.stringify(parseDocuments(got.html));
+        },
+        pdf: async path => {
+          if (typeof path !== 'string' || !DOWNLOAD.test(path)) fail('Ungültiger Dokumentpfad.');
+          let bytes;
+          try { bytes = new Uint8Array(await request(path, 'application/pdf, */*', r => r.arrayBuffer())); }
+          catch (e) { fail(e && e.status ? 'Download fehlgeschlagen (HTTP ' + e.status + ').' : 'Download fehlgeschlagen.'); }
+          if (bytes.length < 5 || String.fromCharCode(...bytes.subarray(0, 5)) !== '%PDF-') fail('Der Download ist kein PDF.');
+          return base64(bytes);
         }
       };
     })();
@@ -107,6 +157,10 @@ struct SharinboxWebSheet: View {
     @State private var uiDelegate = AmazonUIDelegate()
     @State private var ready = false
     @State private var running = false
+    @State private var includeDocuments = true
+    /// "Dokumente abrufen" of the connection (bank connection dialog): off = no list, no PDFs.
+    private var documentsOn: Bool { !model.documentsOffConnectionIDs.contains(connection.id) }
+    @State private var progress = ""
     @State private var notice: String?
     @State private var task: Task<Void, Never>?
 
@@ -115,7 +169,7 @@ struct SharinboxWebSheet: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("\(redaction.masking(connection.displayName)) – Sharinbox").appFont(.headline)
-                    if running { Text("Bestand abrufen …").appFont(.caption) }
+                    if running { Text(progress).appFont(.caption) }
                     else if let notice { Text(notice).appFont(.caption).foregroundStyle(Theme.warning) }
                     else { Text(ready ? String(localized: "Angemeldet – der Bestand kann abgerufen werden.") : String(localized: "Melden Sie sich bei Sharinbox an (E-Mail, Passwort und Authenticator-App).")).appFont(.caption) }
                 }
@@ -127,6 +181,7 @@ struct SharinboxWebSheet: View {
             Divider()
             HStack {
                 Button("Schließen", role: .cancel) { task?.cancel(); close() }.keyboardShortcut(.cancelAction)
+                if documentsOn { Toggle("PDF-Postbox abrufen", isOn: $includeDocuments).disabled(running) }
                 Spacer()
                 Button("Bestand abrufen") { start() }.buttonStyle(.borderedProminent).disabled(!ready || running)
             }.padding(12)
@@ -145,12 +200,12 @@ struct SharinboxWebSheet: View {
         .interactiveDismissDisabled(running)
     }
 
-    private func run(_ script: String) async throws -> String {
+    private func run(_ script: String, arguments: [String: Any] = [:]) async throws -> String {
         try Task.checkCancellation()
         let guardScript = "if (location.origin !== 'https://sharinbox.sgmarkets.com' || !window.__gcSharinbox) throw new Error('Sharinbox: Bitte erneut anmelden.');\n"
         let result: Any?
         do {
-            result = try await browser.webView.callAsyncJavaScript(guardScript + script, arguments: [:], in: nil, contentWorld: .page)
+            result = try await browser.webView.callAsyncJavaScript(guardScript + script, arguments: arguments, in: nil, contentWorld: .page)
         } catch {
             try Task.checkCancellation()
             // The page script's own message; WebKit's generic text says nothing. Text that
@@ -173,14 +228,43 @@ struct SharinboxWebSheet: View {
             guard let pin = model.pinVault() else { running = false; return }
             let connectionId = connection.id
             do {
+                progress = String(localized: "Bestand abrufen …")
                 let snapshot = try await run("return await window.__gcSharinbox.collect();")
                 let summary = try await pin.run { try $0.importSharinboxSnapshot(connectionId: connectionId, snapshotJson: snapshot) }
-                model.toast = String(localized: "Sharinbox: \(summary.accountsUpdated) Depot aktualisiert.")
-                close()
+                var downloaded = 0
+                var failed = 0
+                if includeDocuments && documentsOn {
+                    progress = String(localized: "Postbox auflisten …")
+                    let list = try await run("return await window.__gcSharinbox.documents();")
+                    let pending = try await pin.run { try $0.pendingSharinboxDocuments(connectionId: connectionId, documentsJson: list) }
+                    var streak = QuirionFailureStreak()
+                    for (index, metadata) in pending.enumerated() {
+                        try Task.checkCancellation()
+                        progress = String(localized: "PDF \(index + 1) von \(pending.count) …")
+                        do {
+                            guard let data = metadata.data(using: .utf8),
+                                  let doc = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                                  let path = doc["path"] as? String else { throw SharinboxError.unreadable }
+                            let encoded = try await run("return await window.__gcSharinbox.pdf(path);", arguments: ["path": path])
+                            guard let bytes = Data(base64Encoded: encoded) else { throw SharinboxError.unreadable }
+                            if try await pin.run({ try $0.importSharinboxDocument(connectionId: connectionId, documentJson: metadata, bytes: bytes) }) { downloaded += 1 }
+                            streak.succeeded()
+                        } catch is CancellationError { throw CancellationError() }
+                        catch {
+                            failed += 1
+                            if streak.failed() { failed += pending.count - index - 1; break }
+                        }
+                    }
+                }
+                let message = String(localized: "Sharinbox: \(summary.accountsUpdated) Depot aktualisiert, \(downloaded) neue PDFs.")
+                model.toast = message
+                if failed == 0 { close() }
+                else { notice = message + " " + String(localized: "\(failed) PDFs nicht abrufbar. Ein erneuter Abruf lädt nur fehlende Dokumente.") }
             } catch is CancellationError {
             } catch { notice = describe(error) }
             await pin.checkpoint()
             running = false
+            model.documentsVersion += 1
             model.reloadAll()
             // accounts another login already delivers wait for a choice (#346)
             model.checkPendingAccountSelection()
