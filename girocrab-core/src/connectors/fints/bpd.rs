@@ -128,6 +128,39 @@ fn choose_tan_function(allowed: &[String], names: &HashMap<String, String>) -> S
     allowed.first().cloned().unwrap_or_else(|| "999".into())
 }
 
+/// Structural trace of the TAN parameters (HITANS/HIPINS, TAN media classes) for the
+/// `GIROCRAB_DEPOT_DEBUG=1` log. Bank-wide parameters and method names only; the TAN media
+/// entries (card numbers, device names) are reduced to class and status.
+fn trace_tan_parameters(reply: &BankReply) {
+    for id in ["HITANS", "HIPINS"] {
+        for s in reply.all(id) {
+            let params: Vec<String> = s
+                .elements
+                .iter()
+                .skip(4)
+                .map(|el| el.iter().map(|v| v.text()).collect::<Vec<_>>().join(":"))
+                .collect();
+            crate::depot_debug::log(&format!(
+                "fints {id} v{}: {}",
+                s.version(),
+                params.join(" + ")
+            ));
+        }
+    }
+    if let Some(hitab) = reply.first("HITAB") {
+        let media: Vec<String> = hitab
+            .elements
+            .iter()
+            .skip(2)
+            .map(|el| {
+                let t = |i: usize| el.get(i).map(|v| v.text()).unwrap_or_default();
+                format!("{}:{}", t(0), t(1))
+            })
+            .collect();
+        crate::depot_debug::log(&format!("fints HITAB: {media:?}"));
+    }
+}
+
 impl FinTsConnector {
     /// Highest version of `tx` that both the bank (BPD) and this client support.
     fn negotiated(&self, tx: &str) -> Option<u32> {
@@ -177,6 +210,27 @@ impl FinTsConnector {
         self.negotiated(tx).is_some()
     }
 
+    /// The bank's two-step functions other than `refused` with their names, best first
+    /// (the order `choose_tan_function` would pick them in).
+    pub(super) fn tan_function_fallbacks(&self, refused: &str) -> Vec<(String, String)> {
+        let names: HashMap<String, String> = self.st.tan_functions.iter().cloned().collect();
+        let mut rest: Vec<String> = self
+            .st
+            .tan_functions
+            .iter()
+            .map(|(code, _)| code.clone())
+            .filter(|code| code != refused)
+            .collect();
+        let mut ordered = Vec::new();
+        while !rest.is_empty() {
+            let pick = choose_tan_function(&rest, &names);
+            rest.retain(|code| *code != pick);
+            let name = names.get(&pick).cloned().unwrap_or_default();
+            ordered.push((pick, name));
+        }
+        ordered
+    }
+
     pub(super) fn learn_bpd(&mut self, reply: &BankReply) {
         if crate::depot_debug::enabled() {
             // Which business transactions the bank offers at all (segment names and
@@ -197,6 +251,7 @@ impl FinTsConnector {
                 offered.dedup();
                 crate::depot_debug::log(&format!("fints BPD offers: {}", offered.join(" ")));
             }
+            trace_tan_parameters(reply);
         }
         for s in &reply.segments {
             let id = s.id();
@@ -407,6 +462,18 @@ impl FinTsConnector {
                     .cloned()
                     .collect();
             let names = self.tan_method_names(reply);
+            if !allowed.is_empty() {
+                // an init reply carries no HITANS unless the BPD changed: keep the names
+                let known: HashMap<String, String> =
+                    self.st.tan_functions.iter().cloned().collect();
+                self.st.tan_functions = allowed
+                    .iter()
+                    .map(|a| {
+                        let name = names.get(a).or_else(|| known.get(a)).cloned();
+                        (a.clone(), name.unwrap_or_default())
+                    })
+                    .collect();
+            }
             if !allowed.is_empty()
                 && (self.st.sec_func.is_empty() || !allowed.contains(&self.st.sec_func))
             {
@@ -414,6 +481,8 @@ impl FinTsConnector {
                 let pick = choose_tan_function(&allowed, &names);
                 self.st.tan_method_name = names.get(&pick).cloned().unwrap_or_default();
                 self.st.sec_func = pick;
+                // a new function: the bank may take HKTAN in the init again (#1641)
+                self.st.init_without_hktan = false;
             }
         }
         if let (Some(hitab), true) = (reply.first("HITAB"), self.tan_medium_override.is_empty()) {

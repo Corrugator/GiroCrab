@@ -46,6 +46,16 @@ fn init_rejected_as_malformed(reply: &BankReply) -> bool {
     reply.has("9010") && !reply.has("9931") && !reply.has("9942")
 }
 
+/// Dialog init refused with 9110 ("Falsche Segmentzusammenstellung", #1641). The one-step
+/// sync before it passed, so the part that differs is the HKTAN of the two-step init; the
+/// bank's text has to name it (a 9110 about another segment is not retried).
+fn init_rejected_as_wrong_segments(reply: &BankReply) -> bool {
+    reply
+        .codes
+        .iter()
+        .any(|c| c.0 == "9110" && c.2.to_uppercase().contains("HKTAN"))
+}
+
 /// The bank code does not belong to the login: 9210 "Bankleitzahl passt nicht
 /// zum Benutzer" (comdirect). 9210 alone is any rejected order, so the text decides.
 pub(super) fn blz_mismatch(reply: &BankReply) -> bool {
@@ -588,7 +598,7 @@ impl FinTsConnector {
     pub(super) async fn open_dialog(&mut self, ctx: &ConnectContext) -> CoreResult<Phase> {
         // Authenticated dialog with strong customer authentication.
         self.reset_dialog();
-        let sec = self.sec();
+        let mut sec = self.sec();
         let mut reply = self.send_dialog_init(ctx, &sec).await?;
         // wrong bank code for this login: nothing below can help (`login` may
         // try another one)
@@ -605,6 +615,15 @@ impl FinTsConnector {
                 self.st.single_step = true;
                 reply = retry;
             }
+        }
+        // The bank refuses our HKTAN as a wrong segment combination (#1641): another of its
+        // two-step functions, or the init without HKTAN, may be taken.
+        if sec != "999"
+            && init_rejected_as_wrong_segments(&reply)
+            && let Some(retry) = self.retry_init_without_refused_hktan(ctx).await?
+        {
+            reply = retry;
+            sec = self.sec();
         }
         self.learn_bpd(&reply);
         // The bank wants the TAN device name in every HKTAN and offered no way to
@@ -648,10 +667,68 @@ impl FinTsConnector {
 
     async fn send_dialog_init(&mut self, ctx: &ConnectContext, sec: &str) -> CoreResult<BankReply> {
         let mut payload = vec![self.hkidn(ctx, 3), self.hkvvb(4)];
-        if sec != "999" {
+        if sec != "999" && !self.st.init_without_hktan {
             payload.push(self.hktan_process4(5, "HKIDN"));
         }
         self.send(ctx, payload, sec, None).await
+    }
+
+    /// The dialog init was refused with 9110 for its HKTAN (#1641). Tries the bank's other
+    /// two-step functions, then the same function without HKTAN in the init. Only an answer
+    /// without errors is kept (function or flag go into the state); otherwise the state is as
+    /// it was and `None` leaves the original answer to be reported.
+    async fn retry_init_without_refused_hktan(
+        &mut self,
+        ctx: &ConnectContext,
+    ) -> CoreResult<Option<BankReply>> {
+        let refused = (self.st.sec_func.clone(), self.st.tan_method_name.clone());
+        let found = self.try_init_variants(ctx, &refused.0).await;
+        if !matches!(found, Ok(Some(_))) {
+            self.st.sec_func = refused.0;
+            self.st.tan_method_name = refused.1;
+            self.st.init_without_hktan = false;
+        }
+        found
+    }
+
+    async fn try_init_variants(
+        &mut self,
+        ctx: &ConnectContext,
+        refused: &str,
+    ) -> CoreResult<Option<BankReply>> {
+        for (code, name) in self.tan_function_fallbacks(refused) {
+            crate::depot_debug::log(&format!(
+                "fints: login HKTAN refused with function {refused}, trying {code}"
+            ));
+            self.st.sec_func = code.clone();
+            self.st.tan_method_name = name;
+            if let Some(reply) = self.init_attempt(ctx, &code).await? {
+                return Ok(Some(reply));
+            }
+        }
+        crate::depot_debug::log(&format!(
+            "fints: login HKTAN refused with function {refused}, trying without HKTAN"
+        ));
+        self.st.init_without_hktan = true;
+        self.init_attempt(ctx, refused).await
+    }
+
+    /// A fresh dialog init; the answer if it has no errors and opened a dialog, otherwise the
+    /// dialog is ended (unless the bank already aborted it).
+    async fn init_attempt(
+        &mut self,
+        ctx: &ConnectContext,
+        sec: &str,
+    ) -> CoreResult<Option<BankReply>> {
+        self.reset_dialog();
+        let reply = self.send_dialog_init(ctx, sec).await?;
+        if reply.errors().is_empty() && self.dialog_id != "0" {
+            return Ok(Some(reply));
+        }
+        if !reply.has("9800") {
+            self.end_dialog(ctx, sec).await;
+        }
+        Ok(None)
     }
 
     pub(super) fn sec(&self) -> String {

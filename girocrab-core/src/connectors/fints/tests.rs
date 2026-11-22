@@ -98,6 +98,8 @@ fn mock_bank(
 }
 
 const REJECT_9010: &str = "HNHBK:1:3+000000000000+300+0+1'HIRMG:2:2+9800::Der Dialog wurde abgebrochen.'HIRMS:3:2:3+9010::Ungültiger Signaturaufbau: Fehler im Segmentaufbau.'";
+/// Sparkasse's answer to the login's HKTAN (#1641).
+const REJECT_9110: &str = "HNHBK:1:3+000000000000+300+0+1'HIRMG:2:2+9050::Die Nachricht enthält Fehler.+9800::Dialog abgebrochen+9110::Falsche Segmentzusammenstellung (HKTAN, segvers=7, option=913)'";
 const ACCEPT: &str =
     "HNHBK:1:3+000000000000+300+DIALOG1+1'HIRMG:2:2+0010::Nachricht entgegengenommen.'";
 /// Booked balance 1234,56 EUR (HKSAL).
@@ -279,6 +281,134 @@ async fn failed_single_step_retry_is_not_remembered() {
     assert!(c.open_dialog(&test_ctx()).await.is_err());
     assert_eq!(seen.lock().unwrap().len(), 2);
     assert!(!c.st.single_step);
+}
+
+fn state_with_functions(sec_func: &str, functions: &[(&str, &str)]) -> serde_json::Value {
+    serde_json::json!({"system_id": "123", "sec_func": sec_func, "tan_method_name": "", "tan_medium": "", "versions": {}, "tan_required": {}, "tan_functions": functions})
+}
+
+#[tokio::test]
+async fn dialog_init_9110_falls_back_to_another_tan_function_and_persists() {
+    let (url, seen) = mock_bank(vec![REJECT_9110, ACCEPT]);
+    let state = state_with_functions("913", &[("913", "chipTAN QR"), ("911", "chipTAN optisch")]);
+    let mut c = two_step_connector(&url, state);
+    let phase = c.open_dialog(&test_ctx()).await.unwrap();
+    assert!(matches!(phase, Phase::Ready));
+    {
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.len(), 2);
+        assert!(has_hktan(&seen[0]) && has_hktan(&seen[1]), "{seen:?}");
+    }
+    assert_eq!(c.st.sec_func, "911");
+    assert_eq!(c.st.tan_method_name, "chipTAN optisch");
+    assert!(!c.st.init_without_hktan);
+
+    // The next login starts with the function that worked.
+    let persisted = serde_json::to_value(&c.st).unwrap();
+    let (url2, seen2) = mock_bank(vec![ACCEPT]);
+    let mut c2 = two_step_connector(&url2, persisted);
+    assert_eq!(c2.sec(), "911");
+    c2.open_dialog(&test_ctx()).await.unwrap();
+    assert_eq!(seen2.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn dialog_init_9110_falls_back_to_init_without_hktan_and_persists() {
+    let (url, seen) = mock_bank(vec![REJECT_9110, ACCEPT]);
+    let state = state_with_functions("913", &[("913", "chipTAN QR")]);
+    let mut c = two_step_connector(&url, state);
+    let phase = c.open_dialog(&test_ctx()).await.unwrap();
+    assert!(matches!(phase, Phase::Ready));
+    {
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.len(), 2);
+        assert!(
+            has_hktan(&seen[0]),
+            "first try carries HKTAN: {:?}",
+            seen[0]
+        );
+        assert!(!has_hktan(&seen[1]), "retry has none: {:?}", seen[1]);
+    }
+    // Still two-step: the orders keep their HKTAN.
+    assert_eq!(c.sec(), "913");
+    assert!(c.st.init_without_hktan && !c.st.single_step);
+
+    let persisted = serde_json::to_value(&c.st).unwrap();
+    let (url2, seen2) = mock_bank(vec![ACCEPT]);
+    let mut c2 = two_step_connector(&url2, persisted);
+    c2.open_dialog(&test_ctx()).await.unwrap();
+    let seen2 = seen2.lock().unwrap();
+    assert_eq!(seen2.len(), 1);
+    assert!(!has_hktan(&seen2[0]), "{:?}", seen2[0]);
+}
+
+#[tokio::test]
+async fn dialog_init_9110_with_no_working_variant_keeps_the_state() {
+    let (url, seen) = mock_bank(vec![REJECT_9110]);
+    let state = state_with_functions("913", &[("913", "chipTAN QR"), ("911", "chipTAN optisch")]);
+    let mut c = two_step_connector(&url, state);
+    let err = c.open_dialog(&test_ctx()).await.unwrap_err();
+    assert!(
+        matches!(&err, CoreError::Bank { message, .. } if message.contains("9110")),
+        "the bank's own answer is reported: {err:?}"
+    );
+    // original, the other function, the init without HKTAN
+    assert_eq!(seen.lock().unwrap().len(), 3);
+    assert_eq!(c.st.sec_func, "913");
+    assert!(c.st.tan_method_name.is_empty());
+    assert!(!c.st.init_without_hktan);
+}
+
+#[tokio::test]
+async fn dialog_init_9110_about_another_segment_is_not_retried() {
+    const OTHER: &str = "HNHBK:1:3+000000000000+300+0+1'HIRMG:2:2+9800::Dialog abgebrochen+9110::Falsche Segmentzusammenstellung (HKVVB)'";
+    let (url, seen) = mock_bank(vec![OTHER]);
+    let state = state_with_functions("913", &[("913", "a"), ("911", "b")]);
+    let mut c = two_step_connector(&url, state);
+    assert!(c.open_dialog(&test_ctx()).await.is_err());
+    assert_eq!(seen.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn dialog_init_9110_in_one_step_is_not_retried() {
+    let (url, seen) = mock_bank(vec![REJECT_9110]);
+    let mut c = two_step_connector(&url, synced());
+    assert!(c.open_dialog(&test_ctx()).await.is_err());
+    assert_eq!(seen.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn tan_functions_are_learned_and_fallbacks_follow_the_preference_order() {
+    let mut c = FinTsConnector::new("52090000");
+    let r = reply(b"HITANS:9:6:3+1+1+0+J:N:0:946:2:SECUREGO:Decoupled::SecureGo plus:6:1:x'HIRMS:12:2:3+3920::Zugelassene Zwei-Schritt-Verfahren:910:946:913'");
+    c.learn_bpd(&r);
+    assert_eq!(
+        c.st.tan_functions,
+        [
+            ("910".to_string(), String::new()),
+            ("946".to_string(), "SecureGo plus".to_string()),
+            ("913".to_string(), String::new()),
+        ]
+    );
+    // An init reply without HITANS keeps the names.
+    c.learn_bpd(&reply(
+        b"HIRMS:3:2:3+3920::Zugelassene Zwei-Schritt-Verfahren:910:946:913'",
+    ));
+    assert_eq!(c.st.tan_functions[1].1, "SecureGo plus");
+
+    let codes = |refused: &str| -> Vec<String> {
+        c.tan_function_fallbacks(refused)
+            .into_iter()
+            .map(|(code, _)| code)
+            .collect()
+    };
+    assert_eq!(codes("946"), ["913", "910"]);
+    assert_eq!(codes("913"), ["946", "910"], "app-based first, then 91x");
+    assert!(
+        FinTsConnector::new("52090000")
+            .tan_function_fallbacks("913")
+            .is_empty()
+    );
 }
 
 #[test]
