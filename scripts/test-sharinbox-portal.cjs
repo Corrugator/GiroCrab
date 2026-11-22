@@ -135,6 +135,14 @@ test('odd list entries and other pages are errors that name shapes only', async 
   await assert.rejects(page(async () => response('', 500)).__gcSharinbox.documents(), /HTTP 500/);
 });
 
+test('a list entry the parser does not recognise stops the import', async () => {
+  // same entry, but with another attribute in front of the class: it would be skipped silently
+  const changed = entry(ID_B, 'Neu', '03.02.2026').replace('<div class="doc"', '<div id="x" class="doc"');
+  const html = list(entry(ID_A, 'Ok', '15.01.2026'), changed);
+  await assert.rejects(page(async () => response(html)).__gcSharinbox.documents(),
+    err => /nicht erkannt/.test(err.message) && !/Neu/.test(err.message));
+});
+
 test('downloads a PDF only for a valid path and only if it is one', async () => {
   const calls = [];
   const w = page(async (url, options) => { calls.push(url); return response(url.includes(ID_B) ? '<html>login</html>' : '%PDF-1.7 synthetic'); });

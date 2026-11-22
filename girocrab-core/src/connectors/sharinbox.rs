@@ -59,16 +59,53 @@ struct Position {
     value: i64,
 }
 
+/// ISO 6166: two capital letters, nine capital letters or digits, one check digit (Luhn over the
+/// letters written as 10..35).
+fn valid_isin(isin: &str) -> bool {
+    let b = isin.as_bytes();
+    if b.len() != 12
+        || !b[..2].iter().all(u8::is_ascii_uppercase)
+        || !b[2..11]
+            .iter()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+        || !b[11].is_ascii_digit()
+    {
+        return false;
+    }
+    let digits: Vec<u32> = isin
+        .chars()
+        .flat_map(|c| {
+            let v = c.to_digit(36).unwrap_or(0);
+            if v >= 10 {
+                vec![v / 10, v % 10]
+            } else {
+                vec![v]
+            }
+        })
+        .collect();
+    let sum: u32 = digits
+        .iter()
+        .rev()
+        .enumerate()
+        .map(|(i, &d)| {
+            if i % 2 == 1 {
+                let x = d * 2;
+                x / 10 + x % 10
+            } else {
+                d
+            }
+        })
+        .sum();
+    sum.is_multiple_of(10)
+}
+
 fn positions(depot: &Value) -> CoreResult<Vec<Position>> {
     let items = depot["items"].as_array().ok_or_else(invalid)?;
     let mut seen = HashSet::new();
     let mut out = Vec::with_capacity(items.len());
     for item in items {
         let isin = text(item, "isin")?;
-        if isin.len() != 12
-            || !isin.bytes().all(|b| b.is_ascii_alphanumeric())
-            || !seen.insert(isin.to_string())
-        {
+        if !valid_isin(isin) || !seen.insert(isin.to_string()) {
             return Err(invalid());
         }
         if text(item, "currency")? != "EUR" {
@@ -183,6 +220,14 @@ impl Vault {
     }
 }
 
+/// The depot is archived, deleted or switched off in the account selection: no data is stored for
+/// it (sync contract in `types.rs`).
+fn depot_skipped(db: &rusqlite::Connection, connection_id: i64) -> CoreResult<bool> {
+    Ok(super::account_selection::skipped_refs(db, connection_id)?
+        .iter()
+        .any(|r| r == ACCOUNT_REF))
+}
+
 /// Stable per connection and document; no session state is part of it.
 fn document_source(connection_id: i64, id: &str) -> String {
     format!("sharinbox:{connection_id}:{}", URL_SAFE_NO_PAD.encode(id))
@@ -233,6 +278,10 @@ impl Vault {
         }
         let docs: Vec<Value> = serde_json::from_str(&documents_json).map_err(|_| invalid())?;
         let db = self.db()?;
+        // an archived depot or one left out of the account selection receives nothing
+        if depot_skipped(&db, connection_id)? {
+            return Ok(Vec::new());
+        }
         let mut seen = HashSet::new();
         let mut pending = Vec::new();
         for (index, doc) in docs.into_iter().enumerate() {
@@ -271,6 +320,9 @@ impl Vault {
             .filter(|s| !s.is_empty())
             .unwrap_or("Sharinbox-Dokument");
         let db = self.db()?;
+        if depot_skipped(&db, connection_id)? {
+            return Ok(false);
+        }
         let account_id: i64 = db
             .query_row(
                 "SELECT id FROM accounts WHERE connection_id=?1 AND deleted_ms IS NULL AND external_ref=?2",
@@ -333,7 +385,7 @@ mod tests {
 
     fn fixture() -> Value {
         json!({"version":1,"asOf":"2026-11-21","depot":{
-            "items":[item("FR0000000001", 100.0, 45.14, 4514.0)]}})
+            "items":[item("FR0000120271", 100.0, 45.14, 4514.0)]}})
     }
 
     #[test]
@@ -345,7 +397,7 @@ mod tests {
         assert_eq!(r.accounts[0].external_ref, ACCOUNT_REF);
         assert_eq!(r.holdings.len(), 1);
         let h = &r.holdings[0].holding;
-        assert_eq!((h.isin.as_str(), h.quantity), ("FR0000000001", 100.0));
+        assert_eq!((h.isin.as_str(), h.quantity), ("FR0000120271", 100.0));
         assert_eq!((h.current_price_cents, h.value_cents), (4514, 451_400));
         assert_eq!(h.purchase_price_cents, 0);
         assert_eq!(r.holdings_fetched, vec![ACCOUNT_REF.to_string()]);
@@ -355,10 +407,10 @@ mod tests {
     fn the_price_with_three_decimals_is_tolerated() {
         // 16 290 shares at a price shown as 45.140: no cent difference
         let mut f = fixture();
-        f["depot"]["items"] = json!([item("FR0000000001", 16290.0, 45.14, 735330.6)]);
+        f["depot"]["items"] = json!([item("FR0000120271", 16290.0, 45.14, 735330.6)]);
         assert!(snapshot(&f.to_string()).is_ok());
         // rounded price, value from the unrounded one: stays within 0.05 ct per share
-        f["depot"]["items"] = json!([item("FR0000000001", 16290.0, 45.14, 735335.0)]);
+        f["depot"]["items"] = json!([item("FR0000120271", 16290.0, 45.14, 735335.0)]);
         assert!(snapshot(&f.to_string()).is_ok());
     }
 
@@ -386,14 +438,18 @@ mod tests {
         bad(f);
         // value does not match shares x price
         let mut f = fixture();
-        f["depot"]["items"] = json!([item("FR0000000001", 1.0, 10.0, 100.0)]);
+        f["depot"]["items"] = json!([item("FR0000120271", 1.0, 10.0, 100.0)]);
         bad(f);
         // malformed ISIN, other currency, negative quantity, duplicate ISIN
         for broken in [
             item("FR00", 1.0, 1.0, 1.0),
-            json!({"isin":"FR0000000001","name":"x","quantity":1.0,"price":1.0,
+            // twelve valid characters, wrong check digit, and a lower-case country code
+            item("FR0000120272", 1.0, 1.0, 1.0),
+            item("ABCDEFGHIJKL", 1.0, 1.0, 1.0),
+            item("fr0000120271", 1.0, 1.0, 1.0),
+            json!({"isin":"FR0000120271","name":"x","quantity":1.0,"price":1.0,
                 "priceDate":"2026-11-20","currency":"USD","value":1.0}),
-            item("FR0000000001", -1.0, 1.0, -1.0),
+            item("FR0000120271", -1.0, 1.0, -1.0),
         ] {
             let mut f = fixture();
             f["depot"]["items"] = json!([broken]);
@@ -401,8 +457,8 @@ mod tests {
         }
         let mut f = fixture();
         f["depot"]["items"] = json!([
-            item("FR0000000001", 1.0, 1.0, 1.0),
-            item("FR0000000001", 1.0, 1.0, 1.0)
+            item("FR0000120271", 1.0, 1.0, 1.0),
+            item("FR0000120271", 1.0, 1.0, 1.0)
         ]);
         bad(f);
         assert!(snapshot("not json").is_err());
@@ -413,7 +469,7 @@ mod tests {
         let mut f = fixture();
         f["depot"]["items"][0]["name"] = json!("  ");
         let r = snapshot(&f.to_string()).unwrap();
-        assert_eq!(r.holdings[0].holding.name, "FR0000000001");
+        assert_eq!(r.holdings[0].holding.name, "FR0000120271");
     }
 
     #[test]
@@ -456,6 +512,48 @@ mod tests {
             .import_sharinbox_snapshot(connection, fixture().to_string())
             .unwrap();
         (dir, vault, connection)
+    }
+
+    #[test]
+    fn real_isins_pass_the_check_digit() {
+        for isin in [
+            "US0378331005",
+            "DE0007164600",
+            "FR0000120271",
+            "DE000BAY0017",
+        ] {
+            assert!(valid_isin(isin), "{isin}");
+        }
+    }
+
+    #[test]
+    fn an_archived_depot_receives_no_documents() {
+        let (_dir, vault, connection) = vault_with_depot("sharinbox-archived");
+        vault
+            .db()
+            .unwrap()
+            .execute("UPDATE accounts SET archived_unix = 1", [])
+            .unwrap();
+        let doc = document(DOC_A).to_string();
+        assert!(
+            vault
+                .clone()
+                .pending_sharinbox_documents(connection, format!("[{doc}]"))
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            !vault
+                .clone()
+                .import_sharinbox_document(connection, doc, b"%PDF-1.7 x".to_vec())
+                .unwrap()
+        );
+        let stored: i64 = vault
+            .db()
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM booking_documents", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(stored, 0);
     }
 
     #[test]

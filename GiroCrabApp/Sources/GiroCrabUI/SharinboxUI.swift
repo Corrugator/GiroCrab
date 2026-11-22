@@ -102,7 +102,9 @@ enum SharinboxScripts {
         const problem = reason => problems.set(reason, (problems.get(reason) || 0) + 1);
         const entry = /<li>\s*<div class="doc"[\s\S]*?<\/li>/g;
         let m;
+        let found = 0;
         while ((m = entry.exec(html))) {
+          found++;
           const id = /download\.do\?idSgdocs=([0-9a-fA-F-]{36})/.exec(m[0]);
           const date = /<div class="doc-date">\s*<em>\s*(\d{2})\.(\d{2})\.(\d{4})\s*<\/em>/.exec(m[0]);
           const label = /doc-label">([\s\S]*?)<\/div>/.exec(m[0]);
@@ -112,6 +114,9 @@ enum SharinboxScripts {
           if (!docs.has(key)) docs.set(key, {id: key, sentDate: date[3] + '-' + date[2] + '-' + date[1],
             subject: strip(label && label[1]).slice(0, 200), path: '/SharinBox/sgdocs/download.do?idSgdocs=' + key});
         }
+        // an entry the pattern above skips (e.g. one with an extra attribute) is an error, not a gap
+        const listed = (html.match(/<div\b[^>]*\bclass=["']doc["']/g) || []).length;
+        if (listed !== found) problem('nicht erkannt');
         if (problems.size > 0)
           fail(('Unbekanntes Dokumentformat: ' + [...problems].map(([r, n]) => n + '× ' + r).join(', ')).slice(0, 150));
         return [...docs.values()];
@@ -260,9 +265,11 @@ struct SharinboxWebSheet: View {
                     }
                 }
                 let message = String(localized: "Sharinbox: \(summary.accountsUpdated) Depot aktualisiert, \(downloaded) neue PDFs.")
-                model.toast = message
-                if failed == 0 { close() }
-                else { notice = message + " " + String(localized: "\(failed) PDFs nicht abrufbar. Ein erneuter Abruf lädt nur fehlende Dokumente.") }
+                if model.isCurrent(pin) {
+                    model.toast = message
+                    if failed == 0 { close() }
+                    else { notice = message + " " + String(localized: "\(failed) PDFs nicht abrufbar. Ein erneuter Abruf lädt nur fehlende Dokumente.") }
+                }
             } catch is CancellationError {
             } catch { notice = describe(error) }
             await pin.checkpoint()
