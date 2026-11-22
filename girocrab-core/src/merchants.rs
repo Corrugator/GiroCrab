@@ -1394,12 +1394,18 @@ impl MerchantRules {
         }
         // "PAYPAL *HAENDLER 1234567890" on card statements (#243): a shop the
         // dictionary doesn't know is still named right behind the `*`. A purpose that
-        // repeats the counterparty names the processor again (Advanzia, #1659): it
-        // must not win over the shop a second time, so the shop is then resolved alone
-        // (not again without a purpose: nested processors would double the work).
+        // names this processor again (it repeats the counterparty, Advanzia #1659) must
+        // not win over the shop a second time, so the shop is then resolved without it.
+        // A purpose that doesn't name it keeps what it names (another processor, an own
+        // merchant). An empty purpose never retries: nested processors would double the work.
+        let named_again = if own {
+            word_starts(&t.wpu, needle).next().is_some()
+        } else {
+            needle_in(&t.pu, needle)
+        };
         behind_processor(counterparty).map(|shop| {
             let found = self.resolve_uncached(&shop, purpose);
-            if found.kind == K::PaymentService && !purpose.is_empty() {
+            if found.kind == K::PaymentService && named_again {
                 self.resolve_uncached(&shop, "")
             } else {
                 found
@@ -1965,10 +1971,17 @@ mod tests {
         for purpose in [
             "PAYPAL *HAENDLER MUSTER 1234567890",
             "PAYPAL *HAENDLER MUSTER 1234567890 Kartenzahlung",
+            "PAYPAL *HAENDLER MUSTER",
         ] {
             let shop = MerchantResolver::resolve("PAYPAL *HAENDLER MUSTER 1234567890", purpose);
             assert_eq!(shop.name, "Haendler Muster", "{purpose}");
         }
+        // another processor in the purpose keeps its result (#1694 review)
+        assert_eq!(
+            MerchantResolver::resolve("PAYPAL *HAENDLER MUSTER 1234567890", "Klarna Rechnung 123")
+                .key,
+            "klarna"
+        );
         assert_eq!(
             MerchantResolver::resolve("PAYPAL *SPOTIFY", "PAYPAL *SPOTIFY").key,
             "spotify"
@@ -2554,6 +2567,18 @@ mod tests {
             )
             .name,
             "Haendler Muster"
+        );
+        // an own processor named only in the purpose keeps its result (#1694 review)
+        let billing = rules(
+            &[("r", "Mein Rechnungsdienst", &["rechnungsdienst"], "klarna")],
+            &[],
+            true,
+        );
+        assert_eq!(
+            billing
+                .resolve("PAYPAL *HAENDLER MUSTER 1234567890", "Rechnungsdienst 4711")
+                .key,
+            "u:r"
         );
         // nothing behind it: the copy's own name
         assert_eq!(r.resolve(cp, "Rueckzahlung").name, "Mein PayPal");
