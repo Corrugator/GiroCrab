@@ -69,7 +69,9 @@ wählt ein Konto. `--screenshot` gibt es nur auf macOS. iOS: App im gestarteten 
 starten und das Bild mit `simctl` aufnehmen (wie `scripts/verify_ui.sh`):
 
 ```bash
+xcrun simctl terminate booted de.girocrab.app || true
 SIMCTL_CHILD_GIROCRAB_DEMO_SEED=1 xcrun simctl launch booted de.girocrab.app --pick rewe
+sleep 1.5
 xcrun simctl io booted screenshot /tmp/audit-ios.png
 ```
 
