@@ -151,8 +151,10 @@ struct ConnectionEditSheet: View {
     @State private var selection = AccountSelectionDraft()
     /// Document retrieval of this connection (only for banks that deliver documents).
     @State private var documentsSupported = false
+    @State private var confirmResort = false
+    @State private var resorting = false
     @State private var documentsFetch = true
-    /// "Dokumente abrufen" is off: nothing that fetches documents runs (PostBox included).
+    /// "Dokumente abrufen" is off: nothing that fetches documents runs (Postbox included).
     private var documentsBlocked: Bool { documentsSupported && !documentsFetch }
     @State private var initialDocumentsFetch = true
     @State private var syncSchedule = 0
@@ -190,12 +192,13 @@ struct ConnectionEditSheet: View {
         case .tradeRepublic: return []
         case .americanExpress, .amazonVisa, .advanzia: return []
         case .bunq: return ["bunq.environment"]
+        case .bitcoinCore: return ["bitcoin_core.datadir", "bitcoin_core.rpc_url"]
         case .enableBanking: return ["enablebanking.application_id", "enablebanking.private_key_pem", "enablebanking.redirect_url"]
         case .scalableCapital, .amazonOrders, .fnz, .ibkr, .quirion, .easybank, .alteLeipziger, .volkswagenBank, .uberspace, .schwaebischHall, .equatePlus, .ffb, .fordMoney, .opelDirektbank, .hanseaticBank, .bhw, .finpension: return []
         }
     }
 
-    /// comdirect via FinTS: the API credentials for the PostBox (#838), shown in its section.
+    /// comdirect via FinTS: the API credentials for the Postbox (#838), shown in its section.
     private var postboxKeys: [String] {
         isComdirect && connection.connector == .finTsGeneric ? ["comdirect.client_id", "comdirect.client_secret"] : []
     }
@@ -256,7 +259,7 @@ struct ConnectionEditSheet: View {
     @State private var importingStatement = false
     @State private var importingFinpension = false
     @State private var confirmSwitch = false
-    /// comdirect via FinTS: PostBox through the bank's API as well (#838).
+    /// comdirect via FinTS: Postbox through the bank's API as well (#838).
     @State private var postbox = false
     /// comdirect logins can switch between FinTS and comdirect's own API.
     /// Consorsbank via FinTS: documents from the Online-Archiv as well (#1024).
@@ -294,6 +297,16 @@ struct ConnectionEditSheet: View {
             Form {
                 Section {
                     TextField("Anzeigename", text: $name)
+                    // why a new name may not show in the sidebar (#1467)
+                    switch model.accountsWithOwnBankLabel(connectionID: connection.id) {
+                    case 0: EmptyView()
+                    case 1:
+                        Text("Ein Konto dieses Zugangs zeigt in der Seitenleiste einen eigenen Banknamen oder keinen (Kontoeinstellungen).")
+                            .appFont(.caption).foregroundStyle(Theme.secondary)
+                    case let n:
+                        Text("\(n) Konten dieses Zugangs zeigen in der Seitenleiste einen eigenen Banknamen oder keinen (Kontoeinstellungen).")
+                            .appFont(.caption).foregroundStyle(Theme.secondary)
+                    }
                     TextField(descriptor?.loginLabel ?? String(localized: "Benutzerkennung"), text: $login)
                         .disabled(isRah10)
                         .autocorrectionDisabled()
@@ -318,7 +331,7 @@ struct ConnectionEditSheet: View {
                     }
                     if documentsSupported {
                         Toggle("Dokumente abrufen", isOn: $documentsFetch)
-                            .help("Belege, Kontoauszüge und PostBox-Dokumente werden bei jedem Abruf geladen. Aus: keine neuen Dokumente, bereits gespeicherte bleiben. Beim Einschalten lädt der nächste Abruf fehlende Dokumente nach.")
+                            .help("Belege, Kontoauszüge und Postbox-Dokumente werden bei jedem Abruf geladen. Aus: keine neuen Dokumente, bereits gespeicherte bleiben. Beim Einschalten lädt der nächste Abruf fehlende Dokumente nach.")
                     }
                 } header: { Text("Zugang").appSectionHeader() }
                 if connection.connector == .advanzia {
@@ -430,7 +443,7 @@ struct ConnectionEditSheet: View {
                     if connection.connector == .finTsGeneric {
                         Section {
                             ForEach(postboxKeys, id: \.self) { key in field(key) }
-                            Toggle("PostBox über die Schnittstelle der Bank abrufen", isOn: Binding(
+                            Toggle("Postbox über die Schnittstelle der Bank abrufen", isOn: Binding(
                                 get: { postbox },
                                 set: { on in
                                     // the switch needs the credentials stored
@@ -448,13 +461,13 @@ struct ConnectionEditSheet: View {
                                     guard save() else { return }
                                     dismiss()
                                     model.fetchComdirectPostbox(model.connections.first { $0.id == connection.id } ?? connection)
-                                } label: { Label("PostBox jetzt abrufen", systemImage: "tray.and.arrow.down") }
+                                } label: { Label("Postbox jetzt abrufen", systemImage: "tray.and.arrow.down") }
                                     .disabled(model.syncingConnectionID != nil || documentsBlocked)
                             }
                         } header: {
-                            Text("PostBox").appSectionHeader()
+                            Text("Postbox").appSectionHeader()
                         } footer: {
-                            Text("Kontoauszüge, Finanzreport und Wertpapierabrechnungen aus der comdirect-PostBox, höchstens einmal pro Woche beim Abruf. Dafür sind Client-ID und Client-Secret der comdirect-API nötig und eine eigene Freigabe in der photoTAN-App. Wertpapierdokumente kommen ans Depot, die übrigen auf das erste Girokonto. Über das Kontextmenü in „Belege & PostBox“ lässt sich ein Dokument einem anderen Konto zuordnen.")
+                            Text("Kontoauszüge, Finanzreport und Wertpapierabrechnungen aus der comdirect-Postbox, höchstens einmal pro Woche beim Abruf. Dafür sind Client-ID und Client-Secret der comdirect-API nötig und eine eigene Freigabe in der photoTAN-App. Wertpapierdokumente kommen ans Depot, die übrigen auf das erste Girokonto. Über das Kontextmenü in „Belege & Postbox“ lässt sich ein Dokument einem anderen Konto zuordnen.")
                                 .appFont(.caption).foregroundStyle(Theme.secondary)
                                 .leadingFooter()
                         }
@@ -522,6 +535,10 @@ struct ConnectionEditSheet: View {
                     if let t = connection.lastSyncUnix {
                         LabeledContent("Letzter Abruf") { Text(Date(timeIntervalSince1970: TimeInterval(t)), style: .relative) }
                     }
+                    if isTR || isComdirect || [.fnz, .quirion].contains(connection.connector) {
+                        Button("Dokumente neu einsortieren …") { confirmResort = true }
+                            .disabled(resorting || model.syncingConnectionID != nil)
+                    }
                     if isTR {
                         Button {
                             guard save() else { return }
@@ -562,6 +579,18 @@ struct ConnectionEditSheet: View {
                 ? "GiroCrab ruft comdirect danach per FinTS ab. Die Bankleitzahl kommt aus der IBAN Ihrer Konten. Beim ersten Abruf werden PIN und Freigabe in der App erneut abgefragt."
                 : "GiroCrab ruft comdirect danach über die Schnittstelle der Bank ab. Dafür sind Client-ID und Client-Secret nötig.")
         }
+        .confirmationDialog("Dokumente neu einsortieren?", isPresented: $confirmResort, titleVisibility: .visible) {
+            Button("Neu einsortieren") {
+                resorting = true
+                Task {
+                    await model.resortPortalDocuments(connection.id)
+                    resorting = false
+                }
+            }
+            Button("Abbrechen", role: .cancel) {}
+        } message: {
+            Text("GiroCrab prüft die vorhandenen Belege dieses Bankzugangs erneut. Dabei können sich Dokumenttypen und manuell gewählte Ablagekonten ändern. Bestehende Buchungsverknüpfungen bleiben erhalten. Offene Belege können eine neue Verknüpfung erhalten, auch wenn Sie diese zuvor gelöst haben.")
+        }
         .confirmationDialog("Sitzung löschen?", isPresented: Binding(get: { confirmClear != nil }, set: { if !$0 { confirmClear = nil } }),
                             titleVisibility: .visible, presenting: confirmClear) { kind in
             Button("Sitzung löschen", role: .destructive) {
@@ -600,6 +629,7 @@ struct ConnectionEditSheet: View {
         case .bunq: return "bunq API"
         case .ibkr: return "Interactive Brokers Flex Web Service"
         case .alteLeipziger: return "fin4u"
+        case .bitcoinCore: return String(localized: "Bitcoin Core (eigener Knoten)")
         default: return "Enable Banking (PSD2)"
         }
     }
@@ -645,7 +675,8 @@ struct ConnectionEditSheet: View {
                     revealButton(key)
                 }
             } else {
-                TextField(label, text: binding(key))
+                // a prompt, so an empty field is visible (and clickable) in the grouped form
+                TextField(label, text: binding(key), prompt: Text("nicht gesetzt"))
                     .autocorrectionDisabled()
             }
             if let help = entry?.help {

@@ -46,6 +46,16 @@ func accountHolderLine(_ a: Account) -> String? {
     return owner.isEmpty ? nil : owner
 }
 
+/// One line for the folded account header: "bank · IBAN" and the account's own note, whose line
+/// breaks become spaces (GitHub #1621). Shared by the cash header and the holdings header.
+enum CompactAccountLine {
+    static func text(subtitle: String, note: String) -> String {
+        let flat = note.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }.joined(separator: " ")
+        return [subtitle, flat].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+}
+
 struct StreamHeaderCard: View {
     @Environment(AppModel.self) private var model
     @Environment(\.reportRedaction) private var redaction
@@ -69,6 +79,17 @@ struct StreamHeaderCard: View {
         return nil
     }
 
+    /// "Offline note · bank · IBAN" under the account name (also in the folded title row, #1621).
+    private func accountSubtitle(_ a: Account) -> String {
+        ([model.isOffline(a.id) ? OfflineAccountOptions.subtitle(a) : ""] + [a.bankName, a.iban.isEmpty ? "" : formatIBAN(a.iban)])
+            .filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    /// The folded title row: the subtitle plus the account's own note on one line (#1621).
+    private func compactAccountLine(_ a: Account) -> String {
+        CompactAccountLine.text(subtitle: accountSubtitle(a), note: model.accountNote(for: a.id))
+    }
+
     private var compactHeaderTitle: LocalizedStringKey {
         compactHeader ? "Kopfbereich einblenden" : "Kopfbereich minimieren"
     }
@@ -80,11 +101,27 @@ struct StreamHeaderCard: View {
                 // Minimise the header: more room for the booking list (GitHub #358).
                 CardChevron(collapsed: $compactHeader, customTitle: compactHeaderTitle)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(model.title).sensitive(account == nil ? .labels : .personal).appFont(compactHeader ? .subheadline : .title2, weight: .semibold).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.7)
+                    if compactHeader, let a = account {
+                        // Folded: name and bank · IBAN side by side; the filters sit in the row
+                        // below, once (GitHub #1621).
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(model.title).sensitive(.personal).appFont(.subheadline, weight: .semibold).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.7)
+                                .layoutPriority(1)
+                            let line = compactAccountLine(a)
+                            Text(line)
+                                .sensitive()
+                                .appFont(.caption)
+                                .foregroundStyle(Theme.secondary)
+                                .lineLimit(1)
+                                .help(redaction.masking(line))
+                        }
+                    } else {
+                        Text(model.title).sensitive(account == nil ? .labels : .personal).appFont(compactHeader ? .subheadline : .title2, weight: .semibold).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.7)
+                    }
                     if !compactHeader {
                     Group {
                         if let a = account {
-                            Text(([model.isOffline(a.id) ? OfflineAccountOptions.subtitle(a) : ""] + [a.bankName, a.iban.isEmpty ? "" : formatIBAN(a.iban)]).filter { !$0.isEmpty }.joined(separator: " · "))
+                            Text(accountSubtitle(a))
                                 .sensitive()
                             if let holder = accountHolderLine(a) {
                                 Text(holder)
@@ -113,10 +150,6 @@ struct StreamHeaderCard: View {
                 }
                 .contextMenu {
                     if let a = account { AccountCopyMenu(account: a) }
-                }
-                // Folded: period and status filters share the title row (GitHub #603).
-                if compactHeader {
-                    filterRow
                 }
                 #if os(iOS)
                 // long-press is invisible on iPhone/iPad: show an explicit entry too
