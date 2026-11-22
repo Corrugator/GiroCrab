@@ -31,7 +31,7 @@ final class RuleTagsTests: XCTestCase {
         XCTAssertTrue(model.rules(addingTag: try tag("Lebensmittel").id).isEmpty)
     }
 
-    func testSavingATagsOnlyRuleTagsTheBookingsAndKeepsTheirCategory() throws {
+    func testSavingATagsOnlyRuleTagsTheBookingsAndKeepsTheirCategory() async throws {
         let steuern = try tag("Steuern")
         let rewe = try XCTUnwrap(model.bookings.first { $0.counterparty.localizedCaseInsensitiveContains("REWE") })
         let category = rewe.categoryId
@@ -42,12 +42,34 @@ final class RuleTagsTests: XCTestCase {
         rule.tagIds = [steuern.id]
         rule.minAmountCents = nil
         rule.maxAmountCents = nil
-        XCTAssertNotNil(model.saveRule(rule))
+        let result = try await model.saveRule(rule)
+        XCTAssertGreaterThan(try XCTUnwrap(result).application.get(), 0)
         XCTAssertNil(model.errorMessage)
         let after = try XCTUnwrap(model.bookings.first { $0.id == rewe.id })
         XCTAssertTrue(after.tags.contains { $0.id == steuern.id })
         XCTAssertEqual(after.categoryId, category, "a tags-only rule leaves the category alone")
         XCTAssertEqual(model.rules(addingTag: steuern.id).map(\.name), ["Belege"])
+    }
+
+    func testSavingAndEditingABookingRuleWithAPurposePattern() async throws {
+        let booking = try XCTUnwrap(model.bookings.first { $0.purpose == "Konzertticket" })
+        var rule = model.newRuleDraft(from: booking)
+        // A pasted purpose does not match while the booking draft still searches the payee.
+        rule.pattern = booking.purpose
+        let creation = try await model.saveRule(rule)
+        let saved = try XCTUnwrap(creation)
+        XCTAssertEqual(try saved.application.get(), 0)
+        XCTAssertEqual(model.rules.first { $0.id == saved.id }?.pattern, booking.purpose)
+
+        rule.id = saved.id
+        rule.field = .purpose
+        let edit = try await model.saveRule(rule)
+        let updated = try XCTUnwrap(edit)
+        XCTAssertEqual(updated.id, saved.id)
+        XCTAssertEqual(try updated.application.get(), 1)
+        model.reloadRules()
+        XCTAssertEqual(model.rules.first { $0.id == saved.id }?.field, .purpose)
+        XCTAssertEqual(model.bookings.first { $0.id == booking.id }?.categoryId, rule.categoryId)
     }
 
     func testRuleListCountsTheMatchingBookingsWithTheRuleTags() async throws {
@@ -68,11 +90,16 @@ final class RuleTagsTests: XCTestCase {
         XCTAssertEqual(after?[rental.id], before - 1, "a tag removed by hand no longer counts")
     }
 
-    func testARuleWithoutCategoryAndTagsIsRefused() {
+    func testARuleWithoutCategoryAndTagsIsRefused() async throws {
         var rule = model.newRuleDraft()
         rule.pattern = "REWE"
         rule.categoryId = 0
         rule.tagIds = []
-        XCTAssertNil(model.saveRule(rule))
+        do {
+            _ = try await model.saveRule(rule)
+            XCTFail("Expected saving a rule without a category or tags to fail")
+        } catch let error as CoreError {
+            guard case .InvalidInput = error else { throw error }
+        }
     }
 }
