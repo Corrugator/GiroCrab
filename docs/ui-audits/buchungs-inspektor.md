@@ -59,7 +59,7 @@ Bearbeiten-Popover zeigen bei größerer Schrift weniger Zeilen. Regel: feste Ma
 leerer Navigationsleiste. Es gibt keinen sichtbaren Weg zum Schließen außer Wischen und keinen Hinweis,
 welche Buchung gezeigt wird, sobald man nach unten scrollt. · **Vorschlag:** Händlername als Titel (inline),
 „Fertig“ als Bestätigungsaktion, sichtbarer Griff. Der Titel ist ein Parametertext und wird für „Problem melden“
-über `reportRedaction.masking` ersetzt (`.sensitive()` greift dort nicht). · **Prüfung:** iOS-Simulator; Bericht
+über `redaction.masking` (aus `@Environment(\.reportRedaction)`) ersetzt (`.sensitive()` greift dort nicht). · **Prüfung:** iOS-Simulator; Bericht
 „Problem melden“ zeigt den Titel geschwärzt.
 
 ## INS-4: „Text bearbeiten …“ in eigener Zeile

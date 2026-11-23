@@ -78,9 +78,19 @@ Immer mit Demo-Daten und ohne Banner (Demo-Hinweis, Mitteilungen wie die FinTS-R
 wählt die erste Buchung, deren Händler oder Gegenpartei den Text enthält, `--select <Konto>` ein Konto.
 Screenshots gehören in den PR oder das Issue, nicht ins Repository.
 
-Für Fixes gehören **Vorher/Nachher-Paare** in den PR: dieselbe Ansicht mit denselben Einstellungen, „vorher“ mit den
-Dateien der Ansicht aus `main` (`git checkout upstream/main -- <Datei>.swift`, bauen, aufnehmen, dann
-`git checkout HEAD -- <Datei>.swift`), „nachher“ mit dem Stand des Branches.
+Für Fixes gehören **Vorher/Nachher-Paare** in den PR: dieselbe Ansicht mit denselben Einstellungen, „nachher“ mit dem
+Stand des Branches, „vorher“ aus `main` in einem eigenen Worktree, damit im Branch nichts überschrieben wird. Der
+Worktree nutzt das xcframework des Branches mit (bei UI-Audits ist der Core unverändert):
+
+```bash
+git worktree add /tmp/girocrab-main upstream/main
+ln -s "$PWD/generated" /tmp/girocrab-main/generated
+(cd /tmp/girocrab-main/GiroCrabApp && swift build -q && \
+  .build/debug/GiroCrabMac --demo-seed --pick rewe --screenshot /tmp/vorher-standard.png)
+git worktree remove --force /tmp/girocrab-main
+```
+
+Für das iPhone im Worktree genauso mit `xcodebuild` aus `/tmp/girocrab-main/GiroCrabApp/Xcode/` (siehe unten).
 
 ### macOS
 
