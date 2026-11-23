@@ -611,7 +611,12 @@ fn wire_import(win: &MainWindow) {
 
 type Period = (Option<String>, Option<String>);
 
+/// Every export path (single CSV, one CSV per account, CAMT) reads its period through here,
+/// so the privacy-mode block sits here and applies before any file dialog opens.
 fn export_period(win: &MainWindow) -> Result<Period, String> {
+    if privacy_on(win) {
+        return Err("Im Privatmodus ist der Export gesperrt.".to_string());
+    }
     let gs = win.global::<SettingsImportState>();
     let list_from = crate::daily::range_from(win.get_range_index());
     view::export_period(
@@ -624,9 +629,6 @@ fn export_period(win: &MainWindow) -> Result<Period, String> {
 }
 
 fn export_account(win: &MainWindow) -> Result<(i64, Period), String> {
-    if privacy_on(win) {
-        return Err("Im Privatmodus ist der Export gesperrt.".to_string());
-    }
     let gs = win.global::<SettingsImportState>();
     let (id, _) = usize::try_from(gs.get_acc())
         .ok()
