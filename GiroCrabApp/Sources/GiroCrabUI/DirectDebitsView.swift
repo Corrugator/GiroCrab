@@ -261,7 +261,12 @@ private struct MandateRow: View {
             .opacity(m.active ? 1 : 0.65)
             .background(model.selectedMandateID == m.id ? Theme.selection : Color.clear)
             .contentShape(Rectangle())
-            .onTapGesture { model.selectedMandateID = m.id }
+            .onTapGesture {
+                model.selectedMandateID = m.id
+                #if os(iOS)
+                model.showBookingSheet = true
+                #endif
+            }
             .simultaneousGesture(TapGesture(count: 2).onEnded { model.editMandate(m) })
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(model.selectedMandateID == m.id ? [.isButton, .isSelected] : .isButton)

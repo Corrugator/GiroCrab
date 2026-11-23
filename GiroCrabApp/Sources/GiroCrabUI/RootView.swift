@@ -620,7 +620,7 @@ struct MainSplitView: View {
             WindowSpan(width: $0.size.width, leading: $0.safeAreaInsets.leading, trailing: $0.safeAreaInsets.trailing)
         } action: { span = $0 }
         .capturableSheet(isPresented: Binding(
-            get: { !inspectorFits && model.showBookingSheet && model.selectedBookingID != nil },
+            get: { !inspectorFits && model.showBookingSheet && hasDetailSelection },
             // Only a dismissal by the user ends it: when the window gets wide
             // enough the sheet gives way to the column and returns with the
             // same booking once the window is narrow again.
@@ -640,6 +640,16 @@ struct MainSplitView: View {
     /// column. The documents view has its own preview.
     private var inspectorFits: Bool {
         model.mainColumn != .documents && span.full >= 760 * textScale
+    }
+
+    /// The list in the booking column has a selection the detail sheet can show.
+    private var hasDetailSelection: Bool {
+        switch model.mainColumn {
+        case .bookings: model.selectedBookingID != nil
+        case .planned: model.selectedPlannedID != nil
+        case .directDebits: model.selectedMandateID != nil
+        case .documents, .wealth: false
+        }
     }
 
     /// Up to about 1000 pt the two columns meet on the centre line of the window,
