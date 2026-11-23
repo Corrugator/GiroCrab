@@ -14,13 +14,13 @@ export { RecLine }
 
 export struct AccountRow { id: int, name: string, bank: string, iban: string, header: string, monogram: string, dot: color, balance: string, currency: string, negative: bool, archived: bool }
 export struct CategoryRow { id: int, name: string, depth: int, color: color }
-export struct BookingRow { id: int, checked: bool, counterparty: string, account: string, category: string, category-color: color, detail: string, amount: string, negative: bool, monogram: string, tint: color, logo: image, has-logo: bool, marked: bool, tags-text: string, has-note: bool, expand-detail: string }
-export struct DayGroup { title: string, sum: string, negative: bool, rows: [BookingRow], show-month: bool, month: string, month-income: string, month-expense: string }
+export struct BookingRow { id: int, checked: bool, counterparty: string, account: string, category: string, category-color: color, detail: string, amount: string, balance: string, negative: bool, monogram: string, tint: color, logo: image, has-logo: bool, marked: bool, tags-text: string, has-note: bool, expand-detail: string }
+export struct DayGroup { title: string, sum: string, balance: string, negative: bool, rows: [BookingRow], show-month: bool, month: string, month-income: string, month-expense: string }
 export struct BarGroup { label: string, income: float, expense: float }
 export struct BudgetLine { name: string, amount: string, progress: float, color: color, over: bool }
 export struct TileRow { index: int, name: string, color: color }
 export struct SideRow { kind: int, key: string, label: string, detail: string, badge: string, amount: string, negative: bool, progress: float, dot: color, has-dot: bool, icon: string, depth: int, fold: int }
-export struct TableRow { id: int, c0: string, c1: string, c2: string, c3: string, c4: string, negative: bool }
+export struct TableRow { id: int, c0: string, c1: string, c2: string, c3: string, c4: string, negative: bool, unread: bool }
 export struct KpiTile { label: string, value: string, negative: bool }
 export struct ShareBar { label: string, value: string, share: float, color: color }
 export struct RuleItem { title: string, detail: string }
@@ -335,7 +335,7 @@ component TableLine inherits Rectangle {
         padding-left: 14px;
         padding-right: 14px;
         spacing: 10px;
-        Text { text: data.c0; color: Theme.text; font-size: 12px; font-weight: 600; horizontal-stretch: 3; vertical-alignment: center; overflow: elide; }
+        Text { text: data.c0; color: Theme.text; font-size: 12px; font-weight: data.unread ? 800 : 600; horizontal-stretch: 3; vertical-alignment: center; overflow: elide; }
         Text { text: data.c1; color: Theme.muted; font-size: 12px; horizontal-stretch: 2; vertical-alignment: center; overflow: elide; }
         Text { text: data.c2; color: Theme.text; font-size: 12px; horizontal-stretch: 2; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
         Text { text: data.c3; color: Theme.text; font-size: 12px; horizontal-stretch: 2; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
@@ -394,6 +394,7 @@ component BookingLine inherits Rectangle {
     in property <bool> active;
     in property <bool> multi-select-active;
     in property <bool> compact: false;
+    in property <bool> show-balance: true;
     callback clicked();
     callback toggle-checked();
     callback toggle-mark();
@@ -481,13 +482,23 @@ component BookingLine inherits Rectangle {
                 if b.category == "" && b.tags-text == "" && b.detail != "": Text { text: b.detail; color: Theme.muted; font-size: 11px; overflow: elide; horizontal-stretch: 1; }
             }
         }
-        Text {
-            text: b.amount;
-            color: b.negative ? Theme.amount : Theme.positive;
-            font-size: 13px;
-            font-weight: 600;
-            horizontal-alignment: right;
-            vertical-alignment: center;
+        VerticalLayout {
+            alignment: center;
+            spacing: 0px;
+            Text {
+                text: b.amount;
+                color: b.negative ? Theme.amount : Theme.positive;
+                font-size: 13px;
+                font-weight: 600;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
+            if root.show-balance && b.balance != "": Text {
+                text: b.balance;
+                color: Theme.muted;
+                font-size: 11px;
+                horizontal-alignment: right;
+            }
         }
     }
 }
@@ -498,6 +509,7 @@ component DayCard inherits Rectangle {
     in property <int> selected-booking;
     in property <bool> multi-select-active;
     in property <bool> compact: false;
+    in property <bool> show-balance: true;
     callback select(int);
     callback toggle-checked(int);
     callback toggle-mark(int);
@@ -515,10 +527,12 @@ component DayCard inherits Rectangle {
                 padding-right: 10px;
                 Text { text: day.title; color: Theme.text; font-size: 13px; font-weight: 700; vertical-alignment: center; horizontal-stretch: 1; min-width: 0px; overflow: elide; }
                 Text { text: day.sum; color: day.negative ? Theme.muted : Theme.positive; font-size: 12px; font-weight: 600; vertical-alignment: center; horizontal-alignment: right; }
+                if root.show-balance && day.balance != "": Text { text: "Saldo " + day.balance; color: Theme.muted; font-size: 11px; vertical-alignment: center; horizontal-alignment: right; }
             }
         }
         for b in day.rows: BookingLine {
             b: b;
+            show-balance: root.show-balance;
             active: root.selected-booking == b.id;
             multi-select-active: root.multi-select-active;
             compact: root.compact;
@@ -762,6 +776,8 @@ export component MainWindow inherits Window {
     in-out property <bool> uncategorized-only: false;
     in-out property <bool> documents-only: false;
     in-out property <bool> compact-rows: false;
+    // Saldo-Spalte der Buchungsliste ein/aus (#577); Sitzungszustand wie `compact-rows`.
+    in-out property <bool> show-balance: true;
     in-out property <int> status-index: 0;
     in-out property <int> range-index: 0;
     in-out property <int> tag-index: 0;
@@ -778,6 +794,14 @@ export component MainWindow inherits Window {
     in-out property <string> note-text;
     in-out property <bool> transfer-open: false;
     in property <[string]> transfer-accounts;
+    // Savings sender: recipient fixed to the reference account (#582). Values arrive masked in privacy mode.
+    in-out property <int> tr-account-index: 0;
+    in property <bool> tr-recipient-locked: false;
+    in property <bool> tr-recipient-blocked: false;
+    in property <string> tr-locked-name;
+    in property <string> tr-locked-iban;
+    in property <string> tr-recipient-hint;
+    callback transfer-account-changed(int);
     in-out property <string> transfer-status;
     // Pre-fill from girocrab://transfer URL / --transfer-url (#431); never auto-submitted.
     in-out property <string> transfer-pre-name;
@@ -833,6 +857,12 @@ export component MainWindow inherits Window {
     callback doc-open();
     callback doc-link-open();
     callback doc-unlink();
+    in-out property <bool> docs-unseen-only: false;
+    in property <bool> doc-seen: true;
+    in property <bool> doc-unread-any: false;
+    callback docs-filter-changed();
+    callback doc-mark-seen(bool);
+    callback doc-mark-all-seen();
     in-out property <bool> link-open: false;
     in property <[TableRow]> link-results;
     in-out property <string> link-query;
@@ -984,6 +1014,8 @@ export component MainWindow inherits Window {
     // clipboard text -> empty transfer fields; GiroCode (EPC QR) for the current fields (#663)
     callback transfer-paste(string);
     callback transfer-girocode();
+    callback transfer-girocode-copy();
+    callback transfer-girocode-save();
 
     // account / category management, About, keyboard shortcuts
     in property <[color]> palette;
@@ -1019,6 +1051,8 @@ export component MainWindow inherits Window {
     in-out property <bool> cat-sub: false;
     in property <bool> cat-armed: false;
     in property <string> cat-status;
+    in property <bool> cat-can-up: false;
+    in property <bool> cat-can-down: false;
     callback account-new();
     callback account-edit();
     callback account-save(string, int);
@@ -1029,6 +1063,7 @@ export component MainWindow inherits Window {
     callback category-add(string, int, bool);
     callback category-save(string, int);
     callback category-delete();
+    callback category-move(int);
     callback shortcut(string, bool) -> bool;
     in property <int> search-focus-tick: 0;
     public function refocus() { fs.focus(); }
@@ -1408,6 +1443,10 @@ export component MainWindow inherits Window {
                     text: "Kompakt";
                     checked <=> root.compact-rows;
                 }
+                PillToggle {
+                    text: "Saldo";
+                    checked <=> root.show-balance;
+                }
                 GhostButton { horizontal-stretch: 0; text: root.cards-open ? "Übersicht ausblenden ▴" : "Cashflow & Budgets ▾"; clicked => { root.cards-open = !root.cards-open; } }
                 Rectangle { horizontal-stretch: 1; }
                 Text { text: root.booking-count; color: Theme.muted; font-size: 11px; vertical-alignment: center; }
@@ -1549,6 +1588,7 @@ export component MainWindow inherits Window {
                                 selected-booking: root.selected-booking;
                                 multi-select-active: root.marked-count > 0;
                                 compact: root.compact-rows;
+                                show-balance: root.show-balance;
                                 select(id) => { root.select-booking(id); }
                                 toggle-checked(id) => { root.toggle-booking-checked(id); }
                                 toggle-mark(id) => { root.toggle-booking-mark(id); }
@@ -1605,6 +1645,11 @@ export component MainWindow inherits Window {
                                     current-index <=> root.doc-account-index;
                                 }
                             }
+                            CheckBox {
+                                text: "Nur ungelesene";
+                                checked <=> root.docs-unseen-only;
+                                toggled => { root.docs-filter-changed(); }
+                            }
                             GhostButton { y: (parent.height - self.height) / 2; text: "Datei hinzufügen …"; enabled: !root.busy && root.doc-accounts.length > 0; clicked => { root.doc-attach(); } }
                         }
                     }
@@ -1647,6 +1692,16 @@ export component MainWindow inherits Window {
                     GhostButton { text: "Öffnen"; enabled: root.doc-selected && !root.busy; clicked => { root.doc-open(); } }
                     GhostButton { text: "Mit Umsatz verknüpfen …"; enabled: root.doc-selected && !root.busy; clicked => { root.doc-link-open(); } }
                     GhostButton { text: "Verknüpfung lösen"; enabled: root.doc-linked && !root.busy; clicked => { root.doc-unlink(); } }
+                    Button {
+                        text: root.doc-seen ? "Als ungelesen markieren" : "Als gelesen markieren";
+                        enabled: root.table-selected >= 0;
+                        clicked => { root.doc-mark-seen(!root.doc-seen); }
+                    }
+                    Button {
+                        text: "Alle als gelesen markieren";
+                        enabled: root.doc-unread-any;
+                        clicked => { root.doc-mark-all-seen(); }
+                    }
                     Rectangle { horizontal-stretch: 1; }
                 }
                 if root.view-status != "": Text { text: root.view-status; color: Theme.muted; font-size: 11px; wrap: word-wrap; }
@@ -1936,9 +1991,22 @@ export component MainWindow inherits Window {
                 spacing: 8px;
                 Text { text: "Überweisung"; font-size: 18px; font-weight: 700; color: Theme.text; }
                 Text { text: "Von Konto"; font-size: 11px; color: Theme.muted; }
-                tr-account := ComboBox { model: root.transfer-accounts; current-index: 0; }
-                tr-name := LineEdit { text <=> root.transfer-pre-name; edited => { root.girocode-open = false; } placeholder-text: "Empfänger (Name)"; }
-                tr-iban := LineEdit { text <=> root.transfer-pre-iban; edited => { root.girocode-open = false; } placeholder-text: "IBAN des Empfängers"; }
+                tr-account := ComboBox {
+                    model: root.transfer-accounts;
+                    current-index <=> root.tr-account-index;
+                    selected(value) => { root.transfer-account-changed(self.current-index); }
+                }
+                if !root.tr-recipient-locked : tr-name := LineEdit { text <=> root.transfer-pre-name; edited => { root.girocode-open = false; } placeholder-text: "Empfänger (Name)"; }
+                if !root.tr-recipient-locked : tr-iban := LineEdit { text <=> root.transfer-pre-iban; edited => { root.girocode-open = false; } placeholder-text: "IBAN des Empfängers"; }
+                if root.tr-recipient-locked : VerticalLayout {
+                    spacing: 4px;
+                    if root.tr-locked-name != "" : Text { text: root.tr-locked-name; color: Theme.text; font-size: 13px; }
+                    if root.tr-locked-iban != "" : Text { text: root.tr-locked-iban; color: Theme.text; font-size: 13px; }
+                }
+                if root.tr-recipient-hint != "" : Text {
+                    text: root.tr-recipient-hint;
+                    color: Theme.muted; font-size: 11px; wrap: word-wrap;
+                }
                 tr-amount := LineEdit { text <=> root.transfer-pre-amount; edited => { root.girocode-open = false; } placeholder-text: "Betrag in EUR, z. B. 12,50"; }
                 tr-purpose := LineEdit { text <=> root.transfer-pre-purpose; edited => { root.girocode-open = false; } placeholder-text: "Verwendungszweck (max. 140 Zeichen)"; }
                 HorizontalLayout {
@@ -1959,12 +2027,27 @@ export component MainWindow inherits Window {
                     color: Theme.muted; font-size: 11px; wrap: word-wrap;
                 }
                 if root.transfer-status != "": Text { text: root.transfer-status; color: Theme.negative; font-size: 12px; wrap: word-wrap; }
-                if root.girocode-open: VerticalLayout {
+                // The QR image shows name, IBAN and amount: hidden in privacy mode and while locked.
+                if root.girocode-open && !root.privacy && root.unlocked: VerticalLayout {
                     spacing: 6px;
                     Rectangle {
                         height: 232px;
                         background: #ffffff;
                         Image { source: root.girocode-image; image-fit: contain; image-rendering: pixelated; width: parent.width - 8px; height: parent.height - 8px; }
+                    }
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 8px;
+                        Button {
+                            text: "Bild kopieren";
+                            enabled: !root.privacy && root.unlocked;
+                            clicked => { root.transfer-girocode-copy(); }
+                        }
+                        Button {
+                            text: "Als PNG speichern…";
+                            enabled: !root.privacy && root.unlocked;
+                            clicked => { root.transfer-girocode-save(); }
+                        }
                     }
                     Text {
                         text: "Scannen Sie den Code mit der App Ihrer Bank. Ausführungsdatum und Echtzeitüberweisung wählen Sie dort.";
@@ -1975,11 +2058,16 @@ export component MainWindow inherits Window {
                     alignment: end;
                     spacing: 8px;
                     Button { text: "Abbrechen"; clicked => { root.transfer-open = false; } }
-                    Button { text: "Als GiroCode anzeigen"; clicked => { root.transfer-girocode(); } }
+                    Button {
+                        text: "Als GiroCode anzeigen";
+                        enabled: !root.privacy && root.unlocked;
+                        clicked => { root.transfer-girocode(); }
+                    }
                     Button {
                         text: "Senden";
                         primary: true;
-                        clicked => { root.transfer-submit(tr-account.current-index, tr-name.text, tr-iban.text, tr-amount.text, tr-purpose.text, tr-instant.checked, tr-instant.checked ? "" : tr-date.text); }
+                        enabled: !root.tr-recipient-blocked;
+                        clicked => { root.transfer-submit(tr-account.current-index, root.transfer-pre-name, root.transfer-pre-iban, tr-amount.text, tr-purpose.text, tr-instant.checked, tr-instant.checked ? "" : tr-date.text); }
                     }
                 }
             }
@@ -2096,6 +2184,8 @@ export component MainWindow inherits Window {
         HorizontalLayout {
             spacing: 8px;
             Button { text: "Neu anlegen"; clicked => { root.category-add(root.cat-name, root.cat-color, root.cat-sub); } }
+            Button { text: "▲"; enabled: root.cat-can-up; clicked => { root.category-move(-1); } }
+            Button { text: "▼"; enabled: root.cat-can-down; clicked => { root.category-move(1); } }
             Button { text: "Speichern"; enabled: root.cat-selected >= 0; clicked => { root.category-save(root.cat-name, root.cat-color); } }
             Button { text: root.cat-armed ? "Wirklich löschen?" : "Löschen"; enabled: root.cat-selected >= 0; clicked => { root.category-delete(); } }
             Rectangle { horizontal-stretch: 1; }

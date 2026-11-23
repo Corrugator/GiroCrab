@@ -91,7 +91,7 @@ extension AppModel {
         let (from, to) = periodRange
         runCore {
             let sums = categorySumFilter
-            categories = try vault.listCategoriesFilteredAmount(dateFrom: from, dateTo: to, accountIds: sums.accounts, checked: sums.checked, direction: sums.direction, amountMinCents: sums.amount.minCents, amountMaxCents: sums.amount.maxCents)
+            categories = try vault.listCategoriesFilteredAmount(dateFrom: from, dateTo: to, accountIds: sums.accounts, checked: sums.checked, direction: sums.direction, amountMinCents: sums.amount.minCents, amountMaxCents: sums.amount.maxCents, tagIds: [], untaggedOnly: false)
             categoryTree = Self.buildTree(categories)
             uncategorizedFilteredCount = Int(try vault.countTransactions(filter: uncategorizedCountFilter(sums)))
         }
@@ -107,7 +107,15 @@ extension AppModel {
         if case .bank(let key) = sidebarSelection, bankGroup(for: key) == nil {
             sidebarSelection = .allAccounts
         }
+        // a section whose last account left (another kind, #1630): no account ids would filter
+        // as "all accounts" while the sidebar still names the section
+        if case .group(let id) = sidebarSelection, groups.first(where: { $0.id == id })?.accounts.isEmpty ?? true {
+            sidebarSelection = .allAccounts
+        }
         rebuildAccountIndex()
+        accountsLoaded = true
+        // After unlocking or a sync: a transfer link that came meanwhile.
+        resumePaymentLink()
     }
 
     func reloadDashboard() {
@@ -364,6 +372,69 @@ extension AppModel {
     func toggleCategoryAccount(_ id: Int64) {
         var next = Set(categoryAccountIDs)
         if !next.insert(id).inserted { next.remove(id) }
+        categoryAccountFilter = next.count == accountFilterCandidates.count ? [] : next
+    }
+
+    /// The account filter's choices grouped like the sidebar's account section (#357):
+    /// by user group (top-level groups with their subgroups, then "Ohne Gruppe"), by
+    /// bank or by account type. Only groups that hold accounts the filter offers; empty
+    /// while a sidebar group, bank or user group is selected (the menu stays flat).
+    var accountFilterGroups: [AccountFilterGroup] {
+        if accountFilterIsRestrictedBySidebar { return [] }
+        let offered = accountFilterCandidates
+        let offeredIDs = Set(offered.map(\.id))
+        // the candidates' order (sidebar order) inside every group
+        func pick(_ ids: [Int64]) -> [Account] {
+            let wanted = Set(ids).intersection(offeredIDs)
+            return offered.filter { wanted.contains($0.id) }
+        }
+        let groups: [AccountFilterGroup]
+        switch accountView {
+        case .byGroup:
+            groups = userGroups.filter { $0.depth == 0 }.map { g in
+                AccountFilterGroup(
+                    id: "group:" + g.uuid,
+                    name: g.name.isEmpty ? String(localized: "Ohne Gruppe") : g.name,
+                    symbol: g.sfSymbol.isEmpty ? "folder" : g.sfSymbol,
+                    accounts: pick(userGroupAccountIDs(g.uuid)))
+            }
+        case .byBank:
+            groups = bankGroups.map {
+                AccountFilterGroup(id: "bank:" + $0.id, name: $0.name, symbol: $0.sfSymbol,
+                                   accounts: pick($0.accounts.map(\.id)))
+            }
+        case .byKind:
+            groups = self.groups.map {
+                AccountFilterGroup(id: "kind:\($0.id)", name: $0.name, symbol: $0.sfSymbol,
+                                   accounts: pick($0.accounts.map(\.id)))
+            }
+        }
+        return groups.filter { !$0.accounts.isEmpty }
+    }
+
+    /// The sidebar selection already limits the filter to one group, bank or user group
+    /// (`accountFilterCandidates`), so the filter menu does not group its accounts again.
+    private var accountFilterIsRestrictedBySidebar: Bool {
+        switch sidebarSelection {
+        case .group, .bank, .userGroup: true
+        default: false
+        }
+    }
+
+    /// Every account of the group is chosen (an empty filter, "Alle Konten", chooses none
+    /// on its own, like the single accounts).
+    func isCategoryGroupChosen(_ group: AccountFilterGroup) -> Bool {
+        let chosen = Set(categoryAccountIDs)
+        return !chosen.isEmpty && Set(group.accountIDs).isSubset(of: chosen)
+    }
+
+    /// Adds all accounts of the group, or removes them when all of them are chosen
+    /// already; like `toggleCategoryAccount`, choosing every account means no filter.
+    func toggleCategoryGroup(_ group: AccountFilterGroup) {
+        var next = Set(categoryAccountIDs)
+        // only accounts the filter still offers: a menu built before a reload may hold stale ids
+        let ids = Set(group.accountIDs).intersection(accountFilterCandidates.map(\.id))
+        if !next.isEmpty && ids.isSubset(of: next) { next.subtract(ids) } else { next.formUnion(ids) }
         categoryAccountFilter = next.count == accountFilterCandidates.count ? [] : next
     }
 
@@ -660,7 +731,7 @@ extension AppModel {
                     let flows = followsList && !filter.listHasFlow
                         ? try vault.flowOtherCurrencies(filter: filter)
                         : try vault.selectionFlowOtherCurrencies(accountIds: filter.accountIds, dateFrom: from, dateTo: to, respectInTotal: filter.respectInTotal)
-                    let totals = try vault.categoryOtherCurrencyTotals(dateFrom: from, dateTo: to, accountIds: sums.accounts, checked: sums.checked, direction: sums.direction, amountMinCents: sums.amount.minCents, amountMaxCents: sums.amount.maxCents)
+                    let totals = try vault.categoryOtherCurrencyTotals(dateFrom: from, dateTo: to, accountIds: sums.accounts, checked: sums.checked, direction: sums.direction, amountMinCents: sums.amount.minCents, amountMaxCents: sums.amount.maxCents, tagIds: [], untaggedOnly: false)
                     return (flows, totals)
                 }
                 guard !Task.isCancelled, let loaded else { return }
@@ -866,8 +937,9 @@ extension AppModel {
 
     var allAccounts: [Account] { groups.flatMap(\.accounts) }
     var hasArchivedAccounts: Bool { allAccounts.contains(where: \.isArchived) }
-    /// Everyday accounts counted in "Verfügbar" (skips groups excluded from the total).
-    var liquidAccounts: [Account] { allAccounts.filter { $0.inTotal && [.checking, .savings, .paymentService, .creditCard, .cash].contains($0.kind) } }
+    /// Everyday accounts counted in "Verfügbar" (skips groups excluded from the total): the kinds of
+    /// liquidity grade 1 in the wealth view (#1632), card debts included.
+    var liquidAccounts: [Account] { allAccounts.filter { $0.inTotal && LiquidityGrade.of($0.kind) == .immediate } }
     var liquidBalance: Int64 { liquidAccounts.reduce(0) { $0 + $1.balanceCents } }
     var newCount: Int { allAccounts.reduce(0) { $0 + Int($1.newCount) } }
     /// Bookings without a category (badge of „Ohne Kategorie“): the number the „Ohne Kategorie“ list shows for the
