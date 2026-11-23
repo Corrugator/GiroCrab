@@ -133,6 +133,24 @@ mod tests {
     }
 
     #[test]
+    fn rejects_malformed_grouping_and_keeps_valid_amounts() {
+        for bad in ["12,34,56", "12.34.56", "12.34,56", "1.234.50"] {
+            assert!(AmountFilter::parse(bad, "", 0).is_err(), "{bad}");
+            assert!(AmountFilter::parse("", bad, 0).is_err(), "{bad}");
+        }
+        let cases = [
+            ("1.234,50", 123_450),
+            ("0,50", 50),
+            ("1.234.567", 123_456_700),
+            ("1,234,567.89", 123_456_789),
+        ];
+        for (text, cents) in cases {
+            let a = AmountFilter::parse(text, "", 0).unwrap();
+            assert_eq!(a.min_cents, Some(cents), "{text}");
+        }
+    }
+
+    #[test]
     fn empty_fields_are_inactive() {
         let a = AmountFilter::parse("", "   ", 0).unwrap();
         assert_eq!(a, AmountFilter::default());
