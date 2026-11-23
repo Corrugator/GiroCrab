@@ -16724,6 +16724,17 @@
         }
       }
     },
+    "Großzügig zeigt Kontoname, Inhaber, neue Buchungen und Saldo in einer Zeile. Kompakt braucht weniger Breite und zeigt den Saldo unter dem Namen." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spacious shows account name, owner, new transactions and balance in one line. Compact needs less width and shows the balance below the name."
+          }
+        }
+      }
+    },
     "Grundstück" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -28319,6 +28330,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Page %lld/%lld"
+          }
+        }
+      }
+    },
+    "Seitenleiste" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sidebar"
           }
         }
       }
