@@ -729,7 +729,28 @@ fn apply_filter(win: &MainWindow) {
 
 /// Loads the bookings of the current account scope on a worker thread, then redraws.
 fn reload(win: &MainWindow, vault: Arc<Vault>) {
-    let (target, amount) = with_state(|st| (st.target, st.amount));
+    let amount = with_state(|st| st.amount);
+    reload_with(win, vault, amount);
+}
+
+/// Takes the loaded rows into the state; the amount filter and the marks follow the rows, so a
+/// failed load keeps the previous filter with the previous rows and no hidden booking stays marked.
+fn commit_load(
+    st: &mut State,
+    rows: Vec<Row>,
+    cats: Vec<Category>,
+    amount: amount_filter::AmountFilter,
+) {
+    let ids: std::collections::HashSet<i64> = rows.iter().map(|r| r.id).collect();
+    st.marked.retain(|id| ids.contains(id));
+    st.rows = rows;
+    st.categories = cats;
+    st.amount = amount;
+}
+
+/// Like `reload`, but with a new amount filter that is committed only when the load succeeds.
+fn reload_with(win: &MainWindow, vault: Arc<Vault>, amount: amount_filter::AmountFilter) {
+    let target = with_state(|st| st.target);
     let generation = with_state(|st| {
         st.generation += 1;
         st.generation
@@ -759,10 +780,7 @@ fn reload(win: &MainWindow, vault: Arc<Vault>) {
                         color: tint(&c.color_hex),
                     }));
                     win.set_category_tiles(ModelRc::new(VecModel::from(tiles)));
-                    with_state(|st| {
-                        st.rows = rows;
-                        st.categories = cats;
-                    });
+                    with_state(|st| commit_load(st, rows, cats, amount));
                     apply_filter(&win);
                     request_logos(&win, vault.clone());
                     refresh_dashboard(&win, vault);
@@ -1697,10 +1715,9 @@ fn main() -> Result<(), slint::PlatformError> {
             }
             match amount_filter::AmountFilter::parse(&from, &to, direction) {
                 Ok(amount) => {
-                    with_state(|st| st.amount = amount);
                     win.set_amount_filter_error("".into());
                     win.set_amount_filter_open(false);
-                    reload(&win, v);
+                    reload_with(&win, v, amount);
                 }
                 Err(e) => win.set_amount_filter_error(e.into()),
             }
@@ -1712,12 +1729,11 @@ fn main() -> Result<(), slint::PlatformError> {
             let (Some(win), Some(v)) = (weak.upgrade(), vault.lock().unwrap().clone()) else {
                 return;
             };
-            with_state(|st| st.amount = Default::default());
             win.set_amount_from("".into());
             win.set_amount_to("".into());
             win.set_amount_direction(0);
             win.set_amount_filter_error("".into());
-            reload(&win, v);
+            reload_with(&win, v, Default::default());
         });
     }
     let hits: Arc<Mutex<Vec<Option<BankSearchResult>>>> = Arc::new(Mutex::new(vec![]));
@@ -1930,6 +1946,11 @@ fn main() -> Result<(), slint::PlatformError> {
             SESSION.store(0, Ordering::SeqCst);
             *vault.lock().unwrap() = None;
             with_state(|st| *st = State::default());
+            win.set_amount_from("".into());
+            win.set_amount_to("".into());
+            win.set_amount_direction(0);
+            win.set_amount_filter_open(false);
+            win.set_amount_filter_error("".into());
             win.set_unlocked(false);
             win.set_days(ModelRc::new(VecModel::from(Vec::<DayGroup>::new())));
             win.set_accounts(ModelRc::new(VecModel::from(Vec::<AccountRow>::new())));
@@ -2558,6 +2579,24 @@ mod tests {
                 .all(|r| r.balance == daily::MASK && r.iban != "•••• 3000")
         );
         assert_eq!(total, daily::MASK);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn commit_load_takes_filter_and_drops_marks_of_hidden_rows() {
+        let path =
+            std::env::temp_dir().join(format!("girocrab-win-commit-{}.sqlite", std::process::id()));
+        let vault = Vault::open(path.display().to_string(), vec![7; 32]).unwrap();
+        vault.seed_demo_data().unwrap();
+        let none = amount_filter::AmountFilter::default();
+        let rows = load_rows(&vault, Target::AllAccounts, none).unwrap();
+        let kept = rows[0].id;
+        let mut st = State::default();
+        st.marked.extend([kept, i64::MIN]);
+        let income = amount_filter::AmountFilter::parse("", "", 1).unwrap();
+        commit_load(&mut st, rows, vec![], income);
+        assert_eq!(st.amount, income);
+        assert_eq!(st.marked, std::collections::HashSet::from([kept]));
         let _ = std::fs::remove_file(&path);
     }
 
