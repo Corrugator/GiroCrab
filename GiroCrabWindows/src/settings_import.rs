@@ -307,6 +307,57 @@ pub fn parse_day(text: &str) -> Result<Option<String>, String> {
     }
 }
 
+/// Period menu of the export tab (`settings_import_dialog.slint`): 0 this month, 1 this year,
+/// 2 all, 3 own Von/Bis, 4 the range of the main list.
+pub const PERIOD_CUSTOM: i32 = 3;
+pub const PERIOD_SELECTION: i32 = 4;
+
+/// Maps the period menu onto the core's `date_from` / `date_to` (like the Mac export sheet).
+/// `today` is `YYYY-MM-DD`; `list_from` is the start of the main list's range ("" = all).
+/// An own range with Von after Bis (or a malformed day) is an error.
+pub fn export_period(
+    preset: i32,
+    today: &str,
+    from: &str,
+    to: &str,
+    list_from: &str,
+) -> Result<(Option<String>, Option<String>), String> {
+    match preset {
+        0 => Ok((today.get(..7).map(|m| format!("{m}-01")), None)),
+        1 => Ok((today.get(..4).map(|y| format!("{y}-01-01")), None)),
+        PERIOD_CUSTOM => {
+            let (from, to) = (parse_day(from)?, parse_day(to)?);
+            match (&from, &to) {
+                (Some(f), Some(t)) if f > t => Err(format!(
+                    "„Von“ ({f}) liegt nach „Bis“ ({t}). Bitte den Zeitraum korrigieren."
+                )),
+                _ => Ok((from, to)),
+            }
+        }
+        PERIOD_SELECTION => parse_day(list_from).map(|from| (from, None)),
+        _ => Ok((None, None)),
+    }
+}
+
+/// Hint below the period row; empty = the export buttons are enabled.
+pub fn export_period_hint(preset: i32, from: &str, to: &str) -> String {
+    if preset != PERIOD_CUSTOM {
+        return String::new();
+    }
+    export_period(preset, "", from, to, "")
+        .err()
+        .unwrap_or_default()
+}
+
+/// CAMT version menu: 0 = `camt.053.001.02` (older programs), otherwise `camt.053.001.08`.
+pub fn camt_version(index: i32) -> girocrab_core::export::CamtVersion {
+    if index == 0 {
+        girocrab_core::export::CamtVersion::V02
+    } else {
+        girocrab_core::export::CamtVersion::V08
+    }
+}
+
 pub fn export_file_name(kind: &str, today: &str) -> String {
     match kind {
         "camt" => format!("girocrab-camt053-{today}.xml"),
@@ -487,6 +538,63 @@ mod tests {
         assert_eq!(parse_day("2025-03-01"), Ok(Some("2025-03-01".into())));
         assert!(parse_day("01.03.2025").is_err());
         assert!(parse_day("2025-13-01").is_err());
+    }
+
+    #[test]
+    fn export_period_presets() {
+        let t = "2026-11-23";
+        assert_eq!(
+            export_period(0, t, "", "", ""),
+            Ok((Some("2026-11-01".into()), None))
+        );
+        assert_eq!(
+            export_period(1, t, "", "", ""),
+            Ok((Some("2026-01-01".into()), None))
+        );
+        // Von/Bis only count for the own range, even when they are reversed.
+        assert_eq!(
+            export_period(2, t, "2026-04-01", "2026-03-31", ""),
+            Ok((None, None))
+        );
+    }
+
+    #[test]
+    fn custom_period_validation() {
+        let t = "2026-11-23";
+        assert_eq!(
+            export_period(PERIOD_CUSTOM, t, " 2026-02-01 ", "2026-03-31", ""),
+            Ok((Some("2026-02-01".into()), Some("2026-03-31".into())))
+        );
+        assert_eq!(
+            export_period(PERIOD_CUSTOM, t, "", "2026-03-31", ""),
+            Ok((None, Some("2026-03-31".into())))
+        );
+        assert!(export_period(PERIOD_CUSTOM, t, "2026-03-31", "2026-03-31", "").is_ok());
+        assert!(export_period(PERIOD_CUSTOM, t, "2026-04-01", "2026-03-31", "").is_err());
+        assert!(export_period(PERIOD_CUSTOM, t, "31.03.2026", "", "").is_err());
+        assert_eq!(
+            export_period_hint(PERIOD_CUSTOM, "2026-02-01", "2026-03-31"),
+            ""
+        );
+        assert!(
+            export_period_hint(PERIOD_CUSTOM, "2026-04-01", "2026-03-31").contains("liegt nach")
+        );
+        assert_eq!(export_period_hint(2, "2026-04-01", "2026-03-31"), "");
+    }
+
+    #[test]
+    fn selection_period_and_camt_version() {
+        let t = "2026-11-23";
+        assert_eq!(
+            export_period(PERIOD_SELECTION, t, "x", "y", "2026-08-25"),
+            Ok((Some("2026-08-25".into()), None))
+        );
+        assert_eq!(
+            export_period(PERIOD_SELECTION, t, "", "", ""),
+            Ok((None, None))
+        );
+        assert_eq!(camt_version(0), girocrab_core::export::CamtVersion::V02);
+        assert_eq!(camt_version(1), girocrab_core::export::CamtVersion::V08);
     }
 
     #[test]

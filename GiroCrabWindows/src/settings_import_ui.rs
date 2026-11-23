@@ -9,9 +9,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use girocrab_core::export::{
-    Camt053Request, CamtVersion, ExportCsvBalanceLine, ExportCsvColumns, export_csv,
-};
+use girocrab_core::export::{Camt053Request, ExportCsvBalanceLine, ExportCsvColumns, export_csv};
 use girocrab_core::importers::moneymoney_db::{
     MoneyMoneyDbAccountChoice, MoneyMoneyDbImportOptions, MoneyMoneyDbImportProgress,
     MoneyMoneyImportObserver,
@@ -572,18 +570,45 @@ fn wire_import(win: &MainWindow) {
 type Period = (Option<String>, Option<String>);
 
 fn export_account(win: &MainWindow) -> Result<(i64, Period), String> {
+    if privacy_on(win) {
+        return Err("Im Privatmodus ist der Export gesperrt.".to_string());
+    }
     let gs = win.global::<SettingsImportState>();
     let (id, _) = usize::try_from(gs.get_acc())
         .ok()
         .and_then(|i| with_ui(|u| u.accounts.get(i).cloned()))
         .ok_or("Kein Konto vorhanden.".to_string())?;
-    let from = view::parse_day(&gs.get_date_from())?;
-    let to = view::parse_day(&gs.get_date_to())?;
-    Ok((id, (from, to)))
+    let list_from = crate::daily::range_from(win.get_range_index());
+    let period = view::export_period(
+        gs.get_export_period(),
+        &view::today(now_secs()),
+        &gs.get_date_from(),
+        &gs.get_date_to(),
+        &list_from,
+    )?;
+    Ok((id, period))
+}
+
+/// Recomputes the hint below the period row; a non-empty hint disables both export buttons.
+fn update_period_hint(win: &MainWindow) {
+    let gs = win.global::<SettingsImportState>();
+    let hint = view::export_period_hint(
+        gs.get_export_period(),
+        &gs.get_date_from(),
+        &gs.get_date_to(),
+    );
+    gs.set_period_hint(hint.into());
 }
 
 fn wire_export(win: &MainWindow) {
     let gs = win.global::<SettingsImportState>();
+
+    let weak = win.as_weak();
+    gs.on_period_changed(move || {
+        if let Some(win) = weak.upgrade() {
+            update_period_hint(&win);
+        }
+    });
 
     let weak = win.as_weak();
     gs.on_export_csv(move || {
@@ -654,11 +679,7 @@ fn wire_export(win: &MainWindow) {
             Ok(x) => x,
             Err(e) => return set_status(&win, e),
         };
-        let version = if win.global::<SettingsImportState>().get_camt_version() == 0 {
-            CamtVersion::V02
-        } else {
-            CamtVersion::V08
-        };
+        let version = view::camt_version(win.global::<SettingsImportState>().get_camt_version());
         spawn(
             &win,
             "Wird exportiert …",
