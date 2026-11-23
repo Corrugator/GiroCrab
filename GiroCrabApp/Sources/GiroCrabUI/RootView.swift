@@ -639,6 +639,12 @@ struct MainSplitView: View {
         .onChange(of: span.full < 1000) { _, narrow in
             if narrow { columns = .detailOnly }
         }
+        // In such a window the open sidebar takes its width from the main column (the
+        // documents view no longer fits beside it), so choosing an entry closes it again,
+        // as the push to the detail does on an iPhone.
+        .background(SidebarSelectionWatcher {
+            if span.full < 1000 { columns = .detailOnly }
+        })
     }
 
     /// Room for the booking column (about a phone's width) next to the detail
@@ -663,6 +669,17 @@ struct MainSplitView: View {
     private var inspectorWidth: CGFloat {
         if span.full < 1000 { return span.width - (span.full / 2 - span.leading) }
         return min(max(span.width * 0.4, 320 * textScale), 440 * textScale)
+    }
+
+    /// Reports a new sidebar selection without making the split view read it: a body that
+    /// depends on the selection re-lays out every column on each change (`AppModel.mainColumn`).
+    private struct SidebarSelectionWatcher: View {
+        @Environment(AppModel.self) private var model
+        let changed: () -> Void
+
+        var body: some View {
+            Color.clear.onChange(of: model.sidebarSelection) { changed() }
+        }
     }
 
     /// Width inside the safe area plus the horizontal insets around it.
