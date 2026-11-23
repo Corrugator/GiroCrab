@@ -87,10 +87,9 @@ git worktree add /tmp/girocrab-main upstream/main
 ln -s "$PWD/generated" /tmp/girocrab-main/generated
 (cd /tmp/girocrab-main/GiroCrabApp && swift build -q && \
   .build/debug/GiroCrabMac --demo-seed --pick rewe --screenshot /tmp/vorher-standard.png)
-git worktree remove --force /tmp/girocrab-main
+# iPhone: im Worktree genauso mit xcodebuild aus /tmp/girocrab-main/GiroCrabApp/Xcode/ (siehe unten)
+git worktree remove --force /tmp/girocrab-main   # erst nach macOS und iPhone
 ```
-
-Für das iPhone im Worktree genauso mit `xcodebuild` aus `/tmp/girocrab-main/GiroCrabApp/Xcode/` (siehe unten).
 
 ### macOS
 
