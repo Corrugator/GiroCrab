@@ -759,9 +759,17 @@ fn apply_filter(win: &MainWindow) {
     render_bookings(win);
 }
 
-/// Loads the bookings of the current account scope on a worker thread, then redraws.
+thread_local! {
+    /// Amount filter of the newest load still running (UI thread only); see `PendingAmount`.
+    static PENDING_AMOUNT: std::cell::Cell<amount_filter::PendingAmount> =
+        const { std::cell::Cell::new(amount_filter::PendingAmount::NONE) };
+}
+
+/// Loads the bookings of the current account scope on a worker thread, then redraws. An amount
+/// filter that was accepted but is still loading is carried along instead of being dropped.
 fn reload(win: &MainWindow, vault: Arc<Vault>) {
-    let amount = with_state(|st| st.amount);
+    let committed = with_state(|st| st.amount);
+    let amount = PENDING_AMOUNT.with(|p| p.get().resolve(committed));
     reload_with(win, vault, amount);
 }
 
@@ -789,6 +797,7 @@ fn reload_with(win: &MainWindow, vault: Arc<Vault>, amount: amount_filter::Amoun
         st.generation += 1;
         st.generation
     });
+    PENDING_AMOUNT.with(|p| p.set(amount_filter::PendingAmount::of(amount)));
     let weak = win.as_weak();
     std::thread::spawn(move || {
         let rows = load_rows(&vault, target, amount);
@@ -798,6 +807,9 @@ fn reload_with(win: &MainWindow, vault: Arc<Vault>, amount: amount_filter::Amoun
             if !is_current(&vault) || with_state(|st| st.generation) != generation {
                 return;
             }
+            // Newest load settled: on success its filter is committed below, on failure the
+            // previous one stays; either way later reloads use the committed filter again.
+            PENDING_AMOUNT.with(|p| p.set(amount_filter::PendingAmount::NONE));
             match (rows, cats) {
                 (Ok((rows, balances)), Ok(cats)) => {
                     let mut names = vec![SharedString::from("Ohne Kategorie")];
@@ -814,7 +826,13 @@ fn reload_with(win: &MainWindow, vault: Arc<Vault>, amount: amount_filter::Amoun
                         color: tint(&c.color_hex),
                     }));
                     win.set_category_tiles(ModelRc::new(VecModel::from(tiles)));
-                    with_state(|st| commit_load(st, rows, balances, cats, amount));
+                    // The tag list derives from the rows: keep the selected tag by name, not by index.
+                    let tag_index = with_state(|st| {
+                        let tag = st.filter.tag.clone();
+                        commit_load(st, rows, balances, cats, amount);
+                        amount_filter::tag_index(&tag_names(&st.rows), &tag)
+                    });
+                    win.set_tag_index(tag_index);
                     apply_filter(&win);
                     request_logos(&win, vault.clone());
                     refresh_dashboard(&win, vault);
@@ -2175,6 +2193,7 @@ fn main() -> Result<(), slint::PlatformError> {
             SESSION.store(0, Ordering::SeqCst);
             *vault.lock().unwrap() = None;
             with_state(|st| *st = State::default());
+            PENDING_AMOUNT.with(|p| p.set(amount_filter::PendingAmount::NONE));
             win.set_amount_from("".into());
             win.set_amount_to("".into());
             win.set_amount_direction(0);

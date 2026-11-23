@@ -87,6 +87,36 @@ impl AmountFilter {
     }
 }
 
+/// Amount filter of the newest load that is not committed yet. An ordinary reload started
+/// meanwhile carries it, so it cannot replace an accepted filter with the older committed one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PendingAmount(Option<AmountFilter>);
+
+impl PendingAmount {
+    pub const NONE: Self = Self(None);
+
+    pub fn of(amount: AmountFilter) -> Self {
+        Self(Some(amount))
+    }
+
+    /// The filter a reload must use: the pending one, else the committed one.
+    pub fn resolve(self, committed: AmountFilter) -> AmountFilter {
+        self.0.unwrap_or(committed)
+    }
+}
+
+/// Index of `tag` in the tag selector ("Alle Tags" = 0) after the rows changed, e.g. through the
+/// amount filter; a tag that no longer occurs falls back to "Alle Tags" instead of a neighbour.
+pub fn tag_index(names: &[String], tag: &str) -> i32 {
+    if tag.is_empty() {
+        return 0;
+    }
+    names
+        .iter()
+        .position(|n| n == tag)
+        .map_or(0, |i| i as i32 + 1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,5 +164,28 @@ mod tests {
         let a = AmountFilter::parse("10", "20", 2).unwrap();
         assert_eq!(a.title(true), "Betrag: •••••• · Nur Ausgaben");
         assert_eq!(a.title(false), "Betrag: 10,00 – 20,00 € · Nur Ausgaben");
+    }
+
+    #[test]
+    fn pending_filter_wins_over_committed_until_settled() {
+        let committed = AmountFilter::default();
+        let accepted = AmountFilter::parse("", "", 1).unwrap();
+        // Accepted filter still loading: an ordinary reload must carry it, not the old one.
+        let pending = PendingAmount::of(accepted);
+        assert_eq!(pending.resolve(committed), accepted);
+        // Settled (committed or failed): reloads use the committed filter again.
+        assert_eq!(PendingAmount::NONE.resolve(committed), committed);
+        assert_eq!(PendingAmount::default(), PendingAmount::NONE);
+    }
+
+    #[test]
+    fn tag_index_follows_the_tag_name() {
+        let abc: Vec<String> = ["A", "B", "C"].map(String::from).to_vec();
+        let bc: Vec<String> = ["B", "C"].map(String::from).to_vec();
+        assert_eq!(tag_index(&abc, "B"), 2);
+        // "A" filtered away: "B" stays selected instead of sliding onto "C".
+        assert_eq!(tag_index(&bc, "B"), 1);
+        assert_eq!(tag_index(&bc, "A"), 0);
+        assert_eq!(tag_index(&bc, ""), 0);
     }
 }
