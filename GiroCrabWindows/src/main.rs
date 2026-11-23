@@ -2546,8 +2546,12 @@ fn wire_batch_actions(win: &MainWindow, vault: Arc<Mutex<Option<Arc<Vault>>>>) {
             }
         });
     }
+    depot_export_ui::wire(win, vault.clone());
     wire_export_statements(win, vault);
 }
+
+/// Depot view: "Als CSV exportieren …" (handler and tests in its own module).
+mod depot_export_ui;
 
 /// "Umsätze exportieren" card: format 0 = PDF, 1 = CSV, 2 = CAMT.053; range 0 = month, 1 = year, 2 = all.
 fn wire_export_statements(win: &MainWindow, vault: Arc<Mutex<Option<Arc<Vault>>>>) {

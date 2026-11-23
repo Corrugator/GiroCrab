@@ -832,6 +832,8 @@ export component MainWindow inherits Window {
     in property <string> table-empty;
     in-out property <int> table-selected: -1;
     callback view-changed();
+    // Depot view: writes the active tab as CSV (depot_export_ui.rs).
+    callback depot-export-csv();
     callback table-select(int);
     in property <[string]> doc-accounts;
     in-out property <int> doc-account-index: 0;
@@ -1662,6 +1664,7 @@ export component MainWindow inherits Window {
                     SegButton { text: "Positionen"; checked: root.depot-tab == 0; clicked => { root.depot-tab = 0; root.view-changed(); } }
                     SegButton { text: "Aktivitäten"; checked: root.depot-tab == 1; clicked => { root.depot-tab = 1; root.view-changed(); } }
                     Rectangle { horizontal-stretch: 4; }
+                    GhostButton { text: "Als CSV exportieren …"; enabled: !root.busy; clicked => { root.depot-export-csv(); } }
                 }
                 if root.view-mode == 5: HorizontalLayout {
                     spacing: 8px;
