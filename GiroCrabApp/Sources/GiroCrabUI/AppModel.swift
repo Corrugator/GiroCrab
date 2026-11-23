@@ -1541,7 +1541,7 @@ public final class AppModel {
         Task {
             let picked = await ICloudFolderMigration.inspectPicked(url, wait: wait)
             // „Abbrechen“ while iCloud was still listing the folder: change nothing.
-            guard attempt == self.keyAdoptionAttempt else { self.keyAdoption = .idle; return }
+            guard attempt == self.keyAdoptionAttempt else { return }
             if let message = KeyAdoptionState.pickedFolderMessage(picked) {
                 // names the folder just picked, not the one still configured
                 self.keyAdoption = .notFound(message, searched: ICloudFolderMigration.displayName(for: url)); return
@@ -1557,6 +1557,7 @@ public final class AppModel {
     /// „Abbrechen“ in the paste sheet: a running folder check is dropped (#1503).
     func cancelKeyAdoption() {
         keyAdoptionAttempt += 1
+        if keyAdoption == .working { keyAdoption = .idle }
     }
 
     /// After a pasted key opened the synced vault: switch from the demo to it and

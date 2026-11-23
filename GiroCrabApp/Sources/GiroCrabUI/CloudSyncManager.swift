@@ -199,7 +199,7 @@ public final class CloudSyncManager {
     /// `lastError`) waits here first (#1503). Main actor: the next `sync` call
     /// right after this starts before any other can.
     public func waitUntilIdle() async {
-        while isSyncing { try? await Task.sleep(for: .milliseconds(100)) }
+        while isSyncing { do { try await Task.sleep(for: .milliseconds(100)) } catch { return } }
     }
 
     /// Merges the other devices' snapshots into `vault`, then writes this
