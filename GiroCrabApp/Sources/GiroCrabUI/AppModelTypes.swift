@@ -763,7 +763,6 @@ enum LocalApiCheck: Equatable {
     case failed(String)
 }
 
-/// The running socket and the vault it serves (`reconcileLocalApiServer`).
 /// A block of the account filter menu (#357): one group of the sidebar's
 /// current view ("Nach Gruppe", "Nach Bank" or "Nach Kontoart") with the
 /// accounts of the filter it holds, subgroups included.
@@ -777,6 +776,7 @@ struct AccountFilterGroup: Identifiable, Equatable {
     static func == (a: Self, b: Self) -> Bool { a.id == b.id && a.accountIDs == b.accountIDs }
 }
 
+/// The running socket and the vault it serves (`reconcileLocalApiServer`).
 struct RunningLocalApi {
     let server: LocalApiServer
     weak var servedVault: Vault?

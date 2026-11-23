@@ -377,8 +377,10 @@ extension AppModel {
 
     /// The account filter's choices grouped like the sidebar's account section (#357):
     /// by user group (top-level groups with their subgroups, then "Ohne Gruppe"), by
-    /// bank or by account type. Only groups that hold accounts the filter offers.
+    /// bank or by account type. Only groups that hold accounts the filter offers; empty
+    /// while a sidebar group, bank or user group is selected (the menu stays flat).
     var accountFilterGroups: [AccountFilterGroup] {
+        if accountFilterIsRestrictedBySidebar { return [] }
         let offered = accountFilterCandidates
         let offeredIDs = Set(offered.map(\.id))
         // the candidates' order (sidebar order) inside every group
@@ -410,6 +412,15 @@ extension AppModel {
         return groups.filter { !$0.accounts.isEmpty }
     }
 
+    /// The sidebar selection already limits the filter to one group, bank or user group
+    /// (`accountFilterCandidates`), so the filter menu does not group its accounts again.
+    private var accountFilterIsRestrictedBySidebar: Bool {
+        switch sidebarSelection {
+        case .group, .bank, .userGroup: true
+        default: false
+        }
+    }
+
     /// Every account of the group is chosen (an empty filter, "Alle Konten", chooses none
     /// on its own, like the single accounts).
     func isCategoryGroupChosen(_ group: AccountFilterGroup) -> Bool {
@@ -421,7 +432,8 @@ extension AppModel {
     /// already; like `toggleCategoryAccount`, choosing every account means no filter.
     func toggleCategoryGroup(_ group: AccountFilterGroup) {
         var next = Set(categoryAccountIDs)
-        let ids = Set(group.accountIDs)
+        // only accounts the filter still offers: a menu built before a reload may hold stale ids
+        let ids = Set(group.accountIDs).intersection(accountFilterCandidates.map(\.id))
         if !next.isEmpty && ids.isSubset(of: next) { next.subtract(ids) } else { next.formUnion(ids) }
         categoryAccountFilter = next.count == accountFilterCandidates.count ? [] : next
     }

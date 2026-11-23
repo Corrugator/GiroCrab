@@ -121,4 +121,35 @@ final class CategoryAccountFilterTests: XCTestCase {
         XCTAssertEqual(model.accountFilterGroups.map(\.name), model.groups
             .filter { !$0.accounts.isEmpty }.map(\.name))
     }
+
+    /// A sidebar group, bank or user group already limits the accounts: the menu stays flat.
+    func testASelectedSidebarGroupKeepsTheMenuFlat() throws {
+        model.accountView = .byBank
+        guard let kind = model.groups.first(where: { !$0.accounts.isEmpty }),
+              let bank = model.bankGroups.first(where: { !$0.accounts.isEmpty }) else {
+            throw XCTSkip("The demo vault has no accounts")
+        }
+        model.sidebarSelection = .group(kind.id)
+        XCTAssertTrue(model.accountFilterGroups.isEmpty)
+        model.sidebarSelection = .bank(bank.id)
+        XCTAssertTrue(model.accountFilterGroups.isEmpty)
+        model.sidebarSelection = .allAccounts
+        XCTAssertFalse(model.accountFilterGroups.isEmpty)
+    }
+
+    /// A group from a menu built before a reload may name accounts the filter no longer
+    /// offers; they must not count, or "every account chosen" would clear the filter.
+    func testStaleGroupAccountsDoNotClearTheFilter() throws {
+        model.sidebarSelection = .uncategorized
+        let candidates = model.accountFilterCandidates
+        guard candidates.count > 2 else { throw XCTSkip("The demo vault has too few accounts") }
+        for a in candidates.dropFirst() { model.toggleCategoryAccount(a.id) }
+        let chosen = Set(model.categoryAccountIDs)
+        XCTAssertEqual(chosen.count, candidates.count - 1)
+
+        var ghost = candidates[0]
+        ghost.id = -4242
+        model.toggleCategoryGroup(AccountFilterGroup(id: "stale", name: "Alt", symbol: "folder", accounts: [ghost]))
+        XCTAssertEqual(Set(model.categoryAccountIDs), chosen, "the stale id neither clears nor changes the filter")
+    }
 }
