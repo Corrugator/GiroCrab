@@ -56,6 +56,10 @@ This is such a path, and other connectors can run into it too.
   and it ends the bank dialog. Every fetch gets the flag in `ConnectContext::cancelled`, also
   an automatic one without a prompt. The connector checks it before each order and after
   each answer, so it sends nothing more, and the session stores nothing once the fetch ends.
+  The boundary is the start of an action: an order already handed to the HTTP client, and a
+  `store_fetch` already begun, run to their end. A cancel cannot take back what the bank has
+  received, and `store_fetch` writes accounts and bookings in one vault transaction, so a sync
+  is either stored or not, never half.
 - **FinTS asks in `request`, the one place that sends orders.**
   - `0030` with an `HITAN` task reference: ask with the challenge from `challenge_from`,
     then send the TAN with `HKTAN` process 2 (the `respond` code path, extracted into one
