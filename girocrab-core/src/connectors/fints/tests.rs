@@ -1986,6 +1986,18 @@ fn hispas_advertises_pain_001_09_for_hkccs() {
     assert_eq!(c.pain_version("HKCCS"), Some(super::sepa::PainVersion::V09));
 }
 
+#[test]
+fn hispas_advertises_pain_001_09_for_standing_order_query() {
+    // #1647: a bank that lists its SEPA schemas only in HISPAS (no HICDBS) must get
+    // pain.001.001.09 for HKCDB too, not the .03 fallback ("SEPA-Deskriptor laut BPD nicht zugelassen").
+    let mut c = FinTsConnector::new("50010517");
+    assert_eq!(c.pain_version("HKCDB"), Some(super::sepa::PainVersion::V03));
+    c.learn_bpd(&reply(
+        b"HISPAS:11:1:3+1+1+0+J:N:N:sepade.pain.001.001.09.xsd:urn?:iso?:std?:iso?:20022?:tech?:xsd?:pain.008.001.08'",
+    ));
+    assert_eq!(c.pain_version("HKCDB"), Some(super::sepa::PainVersion::V09));
+}
+
 #[tokio::test]
 async fn a_rejected_account_list_is_no_warning_when_the_upd_lists_the_accounts() {
     // #1083 (flatex): HKSPA is answered with 9380 on every sync; the UPD lists

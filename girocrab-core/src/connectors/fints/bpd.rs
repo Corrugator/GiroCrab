@@ -396,7 +396,7 @@ impl FinTsConnector {
                     let t = v.text();
                     let targets: &[&str] = if t.contains("pain.001.") {
                         &[
-                            "HKCCS", "HKCUM", "HKCSE", "HKCCM", "HKCDE", "HKCDN", "HKCDL",
+                            "HKCCS", "HKCUM", "HKCSE", "HKCCM", "HKCDE", "HKCDN", "HKCDL", "HKCDB",
                         ]
                     } else if t.contains("pain.008.") {
                         &["HKDSE", "HKDME", "HKDSC", "HKDMC", "HKBSE", "HKBME"]
