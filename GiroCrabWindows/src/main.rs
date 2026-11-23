@@ -1274,6 +1274,7 @@ fn transfer_rule_at(index: i32) -> transfer_flow::RecipientRule {
 /// mode; the real values stay in `State` and are enforced again on submit.
 fn apply_transfer_rule(win: &MainWindow, index: i32) {
     use transfer_flow::RecipientRule;
+    wire_transfer_bank(win);
     let rule = transfer_rule_at(index);
     let privacy = privacy_on(win);
     let (locked, name, iban, hint) = match &rule {
@@ -1291,11 +1292,29 @@ fn apply_transfer_rule(win: &MainWindow, index: i32) {
             transfer_flow::SAVINGS_NO_REFERENCE,
         ),
     };
+    let bank = match &rule {
+        RecipientRule::Fixed(r) => daily::iban_bank_line(&r.iban, privacy),
+        _ => String::new(),
+    };
     win.set_tr_recipient_locked(locked);
     win.set_tr_recipient_blocked(rule == RecipientRule::Unavailable);
     win.set_tr_locked_name(name.into());
     win.set_tr_locked_iban(iban.into());
+    win.set_tr_bank(bank.into());
     win.set_tr_recipient_hint(hint.into());
+}
+
+/// Bank line under the recipient IBAN of the transfer dialog (#1563). Re-registering replaces the
+/// handler, so calling this on every open is harmless. The line is derived from the typed text only
+/// and masked in privacy mode; no state is kept.
+fn wire_transfer_bank(win: &MainWindow) {
+    let weak = win.as_weak();
+    win.on_transfer_iban_edited(move |iban| {
+        if let Some(win) = weak.upgrade() {
+            let line = daily::iban_bank_line(iban.as_str(), privacy_on(&win));
+            win.set_tr_bank(line.into());
+        }
+    });
 }
 
 /// Result line of an import run.
