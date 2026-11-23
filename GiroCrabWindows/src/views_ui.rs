@@ -311,6 +311,9 @@ pub fn apply_view(win: &MainWindow, vault: &Arc<Vault>) {
     clear_table(win, "Wird geladen …");
     let (accounts, tangible) = with_ui(|u| (u.accounts.clone(), u.tangible_ids.clone()));
     let generation = with_ui(|u| {
+        // A tab or period change while loading must not re-render the previous depot
+        // (and put its CSV back into the export cache).
+        u.depot = None;
         u.generation += 1;
         u.generation
     });
@@ -453,6 +456,8 @@ fn clear_table(win: &MainWindow, empty: &str) {
     win.set_view_note(SharedString::new());
     // The next render_view restores both from the list it shows.
     with_ui(Ui::forget_shown_list);
+    // Load start, failed load and vault lock all pass here: no CSV of an earlier depot survives.
+    crate::depot_export_ui::forget();
     win.set_doc_unread_any(false);
 }
 

@@ -3,7 +3,7 @@
 //! deliberate user action; file name and status line never carry the depot number.
 
 use std::cell::RefCell;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use girocrab_core::Vault;
@@ -24,8 +24,40 @@ pub fn remember(csv: String, file_name: String) {
     SHOWN.with(|s| *s.borrow_mut() = Some((csv, file_name)));
 }
 
-fn forget() {
+/// Drops the cached CSV: a depot switch starts, a load fails or the vault locks.
+pub fn forget() {
     SHOWN.with(|s| *s.borrow_mut() = None);
+}
+
+/// Writes a new file into `dir` and never replaces one: a taken `name` gets the next free
+/// `-N` name (`create_new` is atomic, no `exists()` race). A failed write removes the file it
+/// just created; files that existed before are never touched.
+fn write_new(dir: &Path, name: &str, data: &str) -> Result<PathBuf, String> {
+    use std::io::Write;
+    for i in 1..=100 {
+        let path = dir.join(crate::settings_import::numbered_file_name(name, i));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(mut f) => {
+                let written = f.write_all(data.as_bytes());
+                // close before removing: Windows cannot delete an open file
+                drop(f);
+                return match written {
+                    Ok(()) => Ok(path),
+                    Err(e) => {
+                        let _ = std::fs::remove_file(&path);
+                        Err(e.to_string())
+                    }
+                };
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e.to_string()),
+        }
+    }
+    Err("Im Ordner ist kein freier Dateiname mehr verfügbar.".to_string())
 }
 
 /// Downloads folder (falls back to home, then temp), like the booking export.
@@ -54,9 +86,8 @@ pub fn wire(win: &MainWindow, vault: Arc<Mutex<Option<Arc<Vault>>>>) {
             win.set_sync_status("Depot-Export: keine Daten geladen.".into());
             return;
         };
-        let path = export_dir().join(name);
-        match std::fs::write(&path, csv) {
-            Ok(()) => win.set_sync_status(format!("Exportiert: {}", path.display()).into()),
+        match write_new(&export_dir(), &name, &csv) {
+            Ok(path) => win.set_sync_status(format!("Exportiert: {}", path.display()).into()),
             Err(e) => win.set_sync_status(format!("Export fehlgeschlagen: {e}").into()),
         }
     });
@@ -138,5 +169,45 @@ mod tests {
             depot_csv_file_name(DepotTab::Activities, "2026-11-23"),
             "GiroCrab-Depot-Aktivitaeten-2026-11-23.csv"
         );
+    }
+
+    fn temp_dir(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "girocrab-depot-export-{}-{tag}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn same_day_export_never_replaces_an_earlier_file() {
+        let dir = temp_dir("numbered");
+        let name = "GiroCrab-Depot-Positionen-2026-11-23.csv";
+        let first = super::write_new(&dir, name, "erste").unwrap();
+        let second = super::write_new(&dir, name, "zweite").unwrap();
+        let third = super::write_new(&dir, name, "dritte").unwrap();
+        assert_eq!(first, dir.join(name));
+        assert_eq!(
+            second,
+            dir.join("GiroCrab-Depot-Positionen-2026-11-23-2.csv")
+        );
+        assert_eq!(
+            third,
+            dir.join("GiroCrab-Depot-Positionen-2026-11-23-3.csv")
+        );
+        assert_eq!(std::fs::read_to_string(&first).unwrap(), "erste");
+        assert_eq!(std::fs::read_to_string(&second).unwrap(), "zweite");
+        assert_eq!(std::fs::read_to_string(&third).unwrap(), "dritte");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn forget_drops_the_remembered_csv() {
+        super::remember("a;b".into(), "x.csv".into());
+        assert!(super::SHOWN.with(|s| s.borrow().is_some()));
+        super::forget();
+        assert!(super::SHOWN.with(|s| s.borrow().is_none()));
     }
 }
