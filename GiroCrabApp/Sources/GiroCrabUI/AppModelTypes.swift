@@ -764,6 +764,19 @@ enum LocalApiCheck: Equatable {
 }
 
 /// The running socket and the vault it serves (`reconcileLocalApiServer`).
+/// A block of the account filter menu (#357): one group of the sidebar's
+/// current view ("Nach Gruppe", "Nach Bank" or "Nach Kontoart") with the
+/// accounts of the filter it holds, subgroups included.
+struct AccountFilterGroup: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let symbol: String
+    let accounts: [Account]
+    var accountIDs: [Int64] { accounts.map(\.id) }
+
+    static func == (a: Self, b: Self) -> Bool { a.id == b.id && a.accountIDs == b.accountIDs }
+}
+
 struct RunningLocalApi {
     let server: LocalApiServer
     weak var servedVault: Vault?
