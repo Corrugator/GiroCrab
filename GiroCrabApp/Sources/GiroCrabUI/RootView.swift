@@ -478,7 +478,11 @@ struct MainSplitView: View {
     @State private var splitterCursorPushed = false
     @Environment(\.openSettings) private var openSettings
     #else
-    @State private var columns: NavigationSplitViewVisibility = .automatic
+    /// The sidebar opens on request (toolbar button): next to the detail column
+    /// the booking column needs the width.
+    @State private var columns: NavigationSplitViewVisibility = .detailOnly
+    @Environment(\.horizontalSizeClass) private var hSize
+    @State private var span = WindowSpan()
     #endif
 
     private var sidebar: some View {
@@ -590,21 +594,67 @@ struct MainSplitView: View {
         }
     }
     #else
+    /// iOS/iPadOS: the booking column is the main area at every width, the
+    /// booking detail sits next to it when the window is wide enough and opens
+    /// as a sheet otherwise. The width decides, not the size class: a
+    /// three-column split shows only its (empty) detail column in a regular
+    /// but narrow window such as an unfolded iPhone Duo held upright, and the
+    /// system `.inspector` shows neither column nor sheet there.
     private var splitView: some View {
-        NavigationSplitView(columnVisibility: $columns) {
-            sidebar
-        } content: {
-            bookingColumn
-        } detail: {
-            if model.mainColumn == .documents {
-                // the documents view has its own preview
-                Color.clear
-            } else {
+        HStack(spacing: 0) {
+            NavigationSplitView(columnVisibility: $columns) {
+                sidebar
+            } detail: {
+                bookingColumn
+            }
+            .navigationSplitViewStyle(.balanced)
+            if inspectorFits {
+                Divider().ignoresSafeArea()
                 InspectorView()
+                    .frame(width: inspectorWidth)
                     .frame(minHeight: 0, maxHeight: .infinity)
+                    .background(Theme.canvas.ignoresSafeArea())
             }
         }
-        .navigationSplitViewStyle(.balanced)
+        .onGeometryChange(for: WindowSpan.self) {
+            WindowSpan(width: $0.size.width, leading: $0.safeAreaInsets.leading, trailing: $0.safeAreaInsets.trailing)
+        } action: { span = $0 }
+        .capturableSheet(isPresented: Binding(
+            get: { !inspectorFits && model.showBookingSheet && model.selectedBookingID != nil },
+            // Only a dismissal by the user ends it: when the window gets wide
+            // enough the sheet gives way to the column and returns with the
+            // same booking once the window is narrow again.
+            set: { if !$0, !inspectorFits { model.showBookingSheet = false } }
+        )) {
+            NavigationStack { InspectorView() }
+                .presentationDetents([.medium, .large])
+        }
+        // Unfolding or widening the window (compact → regular) would otherwise
+        // bring the sidebar back as an overlay on top of the booking column.
+        .onChange(of: hSize) { _, new in
+            if new == .regular { columns = .detailOnly }
+        }
+    }
+
+    /// Room for the booking column (about a phone's width) next to the detail
+    /// column. The documents view has its own preview.
+    private var inspectorFits: Bool {
+        model.mainColumn != .documents && span.full >= 760 * textScale
+    }
+
+    /// Up to about 1000 pt the two columns meet on the centre line of the window,
+    /// which is the fold of an open iPhone Duo; wider windows give the list more.
+    private var inspectorWidth: CGFloat {
+        if span.full < 1000 { return span.width - (span.full / 2 - span.leading) }
+        return min(max(span.width * 0.4, 320 * textScale), 440 * textScale)
+    }
+
+    /// Width inside the safe area plus the horizontal insets around it.
+    private struct WindowSpan: Equatable {
+        var width: CGFloat = 0
+        var leading: CGFloat = 0
+        var trailing: CGFloat = 0
+        var full: CGFloat { width + leading + trailing }
     }
     #endif
 
