@@ -43,7 +43,17 @@ pub(super) fn has_so_prefix(medium: &str) -> bool {
 /// Dialog init refused with 9010 ("Ungültiger Signaturaufbau") that is not a stale
 /// system ID / TAN method (9931/9942).
 fn init_rejected_as_malformed(reply: &BankReply) -> bool {
-    reply.has("9010") && !reply.has("9931") && !reply.has("9942")
+    reply.has("9010") && !stale_system_id(reply)
+}
+
+/// 9931/9942: the stored system ID or TAN function is stale, a new sync is due.
+fn stale_system_id(reply: &BankReply) -> bool {
+    reply.has("9931") || reply.has("9942")
+}
+
+/// An answer to a retry that no other variant can improve: its error is the one to report.
+fn ends_hktan_retry(reply: &BankReply) -> bool {
+    reply.has("9930") || stale_system_id(reply)
 }
 
 /// Dialog init refused with 9110 ("Falsche Segmentzusammenstellung", #1641). The one-step
@@ -618,12 +628,12 @@ impl FinTsConnector {
         }
         // The bank refuses our HKTAN as a wrong segment combination (#1641): another of its
         // two-step functions, or the init without HKTAN, may be taken.
-        if sec != "999"
-            && init_rejected_as_wrong_segments(&reply)
-            && let Some(retry) = self.retry_init_without_refused_hktan(ctx).await?
-        {
-            reply = retry;
-            sec = self.sec();
+        if sec != "999" && init_rejected_as_wrong_segments(&reply) {
+            let (retry, accepted) = self.retry_init_without_refused_hktan(ctx).await?;
+            if accepted || ends_hktan_retry(&retry) {
+                reply = retry;
+                sec = self.sec();
+            }
         }
         self.learn_bpd(&reply);
         // The bank wants the TAN device name in every HKTAN and offered no way to
@@ -675,19 +685,20 @@ impl FinTsConnector {
 
     /// The dialog init was refused with 9110 for its HKTAN (#1641). Tries the bank's other
     /// two-step functions, then the same function without HKTAN in the init. Only an answer
-    /// without errors is kept (function or flag go into the state); otherwise the state is as
-    /// it was and `None` leaves the original answer to be reported.
+    /// without errors is kept (function or flag go into the state, `true`); otherwise the state
+    /// is as it was and the last answer comes back with `false`, so that a stale system ID in
+    /// it (9931/9942) is still handled.
     pub(super) async fn retry_init_without_refused_hktan(
         &mut self,
         ctx: &ConnectContext,
-    ) -> CoreResult<Option<BankReply>> {
+    ) -> CoreResult<(BankReply, bool)> {
         let refused = (
             self.st.sec_func.clone(),
             self.st.tan_method_name.clone(),
             self.st.init_without_hktan,
         );
         let found = self.try_init_variants(ctx, &refused).await;
-        if !matches!(found, Ok(Some(_))) {
+        if !matches!(found, Ok((_, true))) {
             (
                 self.st.sec_func,
                 self.st.tan_method_name,
@@ -701,7 +712,7 @@ impl FinTsConnector {
         &mut self,
         ctx: &ConnectContext,
         refused: &(String, String, bool),
-    ) -> CoreResult<Option<BankReply>> {
+    ) -> CoreResult<(BankReply, bool)> {
         let refused_code = refused.0.as_str();
         for (code, name) in self.tan_function_fallbacks(refused_code) {
             crate::depot_debug::log(&format!(
@@ -710,10 +721,10 @@ impl FinTsConnector {
             self.st.init_without_hktan = false;
             self.st.sec_func = code.clone();
             self.st.tan_method_name = name;
-            match self.init_attempt(ctx, &code).await? {
-                Ok(reply) => return Ok(Some(reply)),
-                Err(true) => return Ok(None),
-                Err(false) => {}
+            let (reply, accepted) = self.init_attempt(ctx, &code).await?;
+            // a stale system ID or a locked access fails every variant alike
+            if accepted || ends_hktan_retry(&reply) {
+                return Ok((reply, accepted));
             }
         }
         crate::depot_debug::log(&format!(
@@ -722,26 +733,25 @@ impl FinTsConnector {
         self.st.sec_func = refused.0.clone();
         self.st.tan_method_name = refused.1.clone();
         self.st.init_without_hktan = true;
-        Ok(self.init_attempt(ctx, refused_code).await?.ok())
+        self.init_attempt(ctx, refused_code).await
     }
 
-    /// A fresh dialog init; the answer if it has no errors and opened a dialog, otherwise the
-    /// dialog is ended (unless the bank already aborted it).
+    /// A fresh dialog init and whether it was accepted (no errors and a dialog opened);
+    /// if not, the dialog is ended unless the bank already aborted it.
     async fn init_attempt(
         &mut self,
         ctx: &ConnectContext,
         sec: &str,
-    ) -> CoreResult<Result<BankReply, bool>> {
+    ) -> CoreResult<(BankReply, bool)> {
         self.reset_dialog();
         let reply = self.send_dialog_init(ctx, sec).await?;
         if reply.errors().is_empty() && self.dialog_id != "0" {
-            return Ok(Ok(reply));
+            return Ok((reply, true));
         }
-        let stop = reply.has("9930") || reply.has("9931") || reply.has("9942");
         if !reply.has("9800") {
             self.end_dialog(ctx, sec).await;
         }
-        Ok(Err(stop))
+        Ok((reply, false))
     }
 
     pub(super) fn sec(&self) -> String {

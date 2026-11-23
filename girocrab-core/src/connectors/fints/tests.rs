@@ -368,13 +368,29 @@ async fn dialog_init_9110_failure_restores_a_saved_init_without_hktan() {
     // the saved flag omits HKTAN, so the bank's 9110 names something else: force the retry
     // by calling it directly
     assert!(
-        c.retry_init_without_refused_hktan(&test_ctx())
+        !c.retry_init_without_refused_hktan(&test_ctx())
             .await
             .unwrap()
-            .is_none()
+            .1
     );
     assert_eq!(c.st.sec_func, "913");
     assert!(c.st.init_without_hktan);
+}
+
+#[tokio::test]
+async fn dialog_init_9110_then_stale_system_id_clears_it_and_reports_that_error() {
+    let (url, seen) = mock_bank(vec![REJECT_9110, STALE_SYSTEM_ID]);
+    let state = state_with_functions("913", &[("913", "chipTAN QR"), ("911", "chipTAN optisch")]);
+    let mut c = two_step_connector(&url, state);
+    let err = c.open_dialog(&test_ctx()).await.unwrap_err();
+    assert!(
+        matches!(&err, CoreError::Bank { message, .. } if message.contains("9931")),
+        "the terminal bank error is reported: {err:?}"
+    );
+    assert!(c.st.system_id.is_empty(), "next login synchronises again");
+    // the stale answer to the first alternative ends the retry
+    assert_eq!(seen.lock().unwrap().len(), 2);
+    assert_eq!(c.st.sec_func, "913");
 }
 
 #[tokio::test]
