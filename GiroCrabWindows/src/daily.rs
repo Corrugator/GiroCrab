@@ -528,6 +528,18 @@ mod bank_line_tests {
     use super::*;
 
     #[test]
+    fn iban_bank_line_is_empty_for_blank_input() {
+        assert_eq!(iban_bank_line("", false), "");
+        assert_eq!(iban_bank_line("   \t ", true), "");
+    }
+
+    #[test]
+    fn iban_bank_line_ignores_whitespace_in_unknown_iban() {
+        assert_eq!(iban_bank_line("XX00 0000 0000", false), "");
+        assert_eq!(iban_bank_line("XX00 0000 0000", true), "");
+    }
+
+    #[test]
     fn shows_bank_name_trimmed() {
         assert_eq!(
             bank_line_text(Some("  Sparkasse Test ".into()), false),
