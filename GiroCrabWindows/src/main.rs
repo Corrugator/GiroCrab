@@ -2868,15 +2868,44 @@ mod tests {
         assert!(transfer_prefill_from_args(args(&["--demo"])).is_none());
     }
 
+    /// Unique temp database path per run; the file is removed on drop, also after a failed assert.
+    /// Declare it before the vault so the vault is dropped (and unlocked) first.
+    struct TempDb(std::path::PathBuf);
+
+    impl TempDb {
+        fn new(tag: &str) -> Self {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default();
+            Self(std::env::temp_dir().join(format!(
+                "girocrab-win-{tag}-{}-{nanos}.sqlite",
+                std::process::id()
+            )))
+        }
+
+        fn path_string(&self) -> String {
+            self.0.display().to_string()
+        }
+    }
+
+    impl Drop for TempDb {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+            for suffix in ["-wal", "-shm", "-journal"] {
+                let mut side = self.0.clone().into_os_string();
+                side.push(suffix);
+                let _ = std::fs::remove_file(std::path::PathBuf::from(side));
+            }
+        }
+    }
+
     #[test]
     fn file_import_is_logged_except_cancelled() {
         use girocrab_core::connectors::SyncSummary;
         use girocrab_core::sync_log::SyncLogFilter;
-        let path = std::env::temp_dir().join(format!(
-            "girocrab-win-fileimp-{}.sqlite",
-            std::process::id()
-        ));
-        let vault = Vault::open(path.display().to_string(), vec![5; 32]).unwrap();
+        let db = TempDb::new("fileimp");
+        let vault = Vault::open(db.path_string(), vec![5; 32]).unwrap();
         let summary = SyncSummary {
             accounts_updated: 1,
             transactions_imported: 3,
@@ -2903,14 +2932,12 @@ mod tests {
             log.iter()
                 .any(|e| e.outcome == SyncLogOutcome::Error && e.message == "kaputt")
         );
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
     fn demo_vault_has_accounts_and_bookings() {
-        let path =
-            std::env::temp_dir().join(format!("girocrab-win-demo-{}.sqlite", std::process::id()));
-        let vault = Vault::open(path.display().to_string(), vec![7; 32]).unwrap();
+        let db = TempDb::new("demo");
+        let vault = Vault::open(db.path_string(), vec![7; 32]).unwrap();
         vault.seed_demo_data().unwrap();
         let (rows, _) = account_rows(&vault, false).unwrap();
         assert!(!rows.is_empty());
@@ -2929,7 +2956,6 @@ mod tests {
                 .all(|r| r.balance == daily::MASK && r.iban != "•••• 3000")
         );
         assert_eq!(total, daily::MASK);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

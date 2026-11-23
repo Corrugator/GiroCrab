@@ -160,11 +160,24 @@ pub fn read_export(path: &std::path::Path) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
-/// Core import error → user text. Keeps only the head before the first `:` / line break and
-/// drops it entirely if it looks like file content (quotes, separators, JSON) or is overlong.
+/// Core import error → user text. Keeps only the last `:`-separated part of the first line (the
+/// reason after the core's category prefixes, e.g. "Ungültige Eingabe: Finpension: …") and drops it
+/// entirely if it looks like file content (quotes, separators, JSON, no letters at all, e.g. a bare
+/// number) or is overlong.
 pub fn import_error_text(core: &str) -> String {
-    let head = core.split([':', '\n']).next().unwrap_or_default().trim();
-    if head.is_empty() || head.chars().count() > 120 || head.contains(['"', '\'', ';', '{', '[']) {
+    let head = core
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .rsplit(':')
+        .next()
+        .unwrap_or_default()
+        .trim();
+    if head.is_empty()
+        || head.chars().count() > 120
+        || head.contains(['"', '\'', ';', '{', '['])
+        || !head.chars().any(char::is_alphabetic)
+    {
         return INVALID_EXPORT.into();
     }
     format!("Finpension-Import: {head}")
@@ -682,7 +695,18 @@ mod tests {
         );
         assert_eq!(
             import_error_text("Ungültiger Export: Zeile 2 \"4711;Kauf\""),
-            "Finpension-Import: Ungültiger Export"
+            INVALID_EXPORT
+        );
+        assert_eq!(
+            import_error_text(
+                "Ungültige Eingabe: Finpension: Keine Positionen oder Buchungen erkannt."
+            ),
+            "Finpension-Import: Keine Positionen oder Buchungen erkannt."
+        );
+        // A bare value from the file after the last colon is never shown.
+        assert_eq!(
+            import_error_text("Ungültiger Export: Zeile 3: 4711"),
+            INVALID_EXPORT
         );
         assert_eq!(
             import_error_text("2026-01-02;Kauf;\"Fonds\""),
