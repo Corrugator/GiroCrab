@@ -299,7 +299,20 @@ pub fn parse_day(text: &str) -> Result<Option<String>, String> {
             _ => c.is_ascii_digit(),
         })
         && matches!(t[5..7].parse::<u32>(), Ok(1..=12))
-        && matches!(t[8..10].parse::<u32>(), Ok(1..=31));
+        && t[8..10].parse::<u32>().is_ok_and(|d| {
+            let (y, m) = (
+                t[..4].parse::<u32>().unwrap_or(0),
+                t[5..7].parse::<u32>().unwrap_or(0),
+            );
+            let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+            let days = match m {
+                2 if leap => 29,
+                2 => 28,
+                4 | 6 | 9 | 11 => 30,
+                _ => 31,
+            };
+            (1..=days).contains(&d)
+        });
     if ok {
         Ok(Some(t.to_string()))
     } else {
@@ -334,7 +347,7 @@ pub fn export_period(
                 _ => Ok((from, to)),
             }
         }
-        PERIOD_SELECTION => parse_day(list_from).map(|from| (from, None)),
+        PERIOD_SELECTION => parse_day(list_from).map(|from| (from, Some(today.to_string()))),
         _ => Ok((None, None)),
     }
 }
@@ -538,6 +551,13 @@ mod tests {
         assert_eq!(parse_day("2025-03-01"), Ok(Some("2025-03-01".into())));
         assert!(parse_day("01.03.2025").is_err());
         assert!(parse_day("2025-13-01").is_err());
+        assert!(parse_day("2026-02-30").is_err());
+        assert!(parse_day("2026-02-29").is_err());
+        assert!(parse_day("2026-04-31").is_err());
+        assert_eq!(parse_day("2024-02-29"), Ok(Some("2024-02-29".into())));
+        assert!(parse_day("1900-02-29").is_err());
+        assert_eq!(parse_day("2000-02-29"), Ok(Some("2000-02-29".into())));
+        assert!(export_period_hint(PERIOD_CUSTOM, "2026-02-30", "").contains("kein Datum"));
     }
 
     #[test]
@@ -587,11 +607,11 @@ mod tests {
         let t = "2026-11-23";
         assert_eq!(
             export_period(PERIOD_SELECTION, t, "x", "y", "2026-08-25"),
-            Ok((Some("2026-08-25".into()), None))
+            Ok((Some("2026-08-25".into()), Some(t.into())))
         );
         assert_eq!(
             export_period(PERIOD_SELECTION, t, "", "", ""),
-            Ok((None, None))
+            Ok((None, Some(t.into())))
         );
         assert_eq!(camt_version(0), girocrab_core::export::CamtVersion::V02);
         assert_eq!(camt_version(1), girocrab_core::export::CamtVersion::V08);
