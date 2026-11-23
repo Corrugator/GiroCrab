@@ -637,9 +637,10 @@ struct MainSplitView: View {
     }
 
     /// Room for the booking column (about a phone's width) next to the detail
-    /// column. The documents view has its own preview.
+    /// column. The documents view has its own preview, and „Vermögen“ has nothing to
+    /// select: the column would show the booking picked last in another list.
     private var inspectorFits: Bool {
-        model.mainColumn != .documents && span.full >= 760 * textScale
+        model.mainColumn != .documents && model.mainColumn != .wealth && span.full >= 760 * textScale
     }
 
     /// The list in the booking column has a selection the detail sheet can show.
