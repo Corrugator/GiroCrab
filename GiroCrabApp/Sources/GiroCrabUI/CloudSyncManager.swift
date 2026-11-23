@@ -298,13 +298,12 @@ public final class CloudSyncManager {
         _ = autoState.tick(changeCount: vault.changeCount(), now: Date())
     }
 
-    @ObservationIgnored var onTestingRunEntered: (@MainActor () -> Void)?
+    /// Tests only: awaited inside an automatic run once it holds `inFlight`,
+    /// before any work, so a test can keep that run going.
     @ObservationIgnored var testingRunGate: (@MainActor () async -> Void)?
 
     func runForTesting(write: Bool, poll: Bool) async {
         guard let autoVault else { return }
-        onTestingRunEntered?()
-        if let testingRunGate { await testingRunGate() }
         await run(vault: autoVault, write: write, poll: poll)
     }
 
@@ -409,16 +408,22 @@ public final class CloudSyncManager {
     /// `isSyncing` run on the main actor without a suspension point in between
     /// (a same-actor call starts synchronously), so no other sync can take the
     /// turn and make `sync` drop this one. `onStart` runs once it started.
-    /// - Returns: false when it did not run (dev bypass).
+    /// - Parameter isCurrent: checked in that same turn; false (the vault was
+    ///   locked or swapped while waiting) drops the sync before it writes.
+    /// - Returns: false when it did not run (sync switched off or vault no
+    ///   longer current while waiting, dev bypass).
     @discardableResult
-    public func syncWhenIdle(vault: Vault, onStart: (@MainActor () -> Void)? = nil) async -> Bool {
+    public func syncWhenIdle(
+        vault: Vault, onStart: (@MainActor () -> Void)? = nil,
+        isCurrent: @MainActor () -> Bool = { true }
+    ) async -> Bool {
         while true {
             if let running = inFlight {
                 await running.value
             } else if isSyncing || autoBusy {
                 try? await Task.sleep(for: .milliseconds(100))
             } else {
-                guard isEnabled else { return false }
+                guard isEnabled, isCurrent() else { return false }
                 return await sync(vault: vault, onStart: onStart)
             }
         }
@@ -442,6 +447,7 @@ public final class CloudSyncManager {
         guard inFlight == nil else { return }
         // Cleared inside the task, before anyone awaiting it resumes.
         let task = Task {
+            if let gate = self.testingRunGate { await gate() }
             await self.perform(vault: vault, write: write, poll: poll)
             self.inFlight = nil
         }
