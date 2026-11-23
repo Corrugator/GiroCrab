@@ -361,8 +361,10 @@ final class CloudSyncTests: XCTestCase {
         XCTAssertTrue(try peer.1.write(vault: peer.0).wrote)
         let (v, _) = try device(folder, seeded: true)
         let sync = CloudSyncManager.shared
+        let wasEnabled = sync.isEnabled
+        sync.isEnabled = true
         sync.setFolderForTesting(folder)
-        defer { sync.setFolderForTesting(nil); sync.stopAutoSync() }
+        defer { sync.setFolderForTesting(nil); sync.stopAutoSync(); sync.isEnabled = wasEnabled }
         sync.prepareAutoSyncForTesting(vault: v)
         try note(v, newest: true, "pending")
         let polling = Task { await sync.runForTesting(write: false, poll: true) }
