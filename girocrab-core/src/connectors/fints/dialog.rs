@@ -634,11 +634,11 @@ impl FinTsConnector {
         seg_id: &str,
         segment: Vec<u8>,
     ) -> CoreResult<BankReply> {
-        let prompt = ctx.prompt.as_ref();
-        // cancelled during the fetch: nothing more goes to the bank
-        if prompt.is_some_and(FetchPrompt::is_cancelled) {
+        // cancelled during the fetch, also an automatic one: nothing more goes to the bank
+        if ctx.cancelled.is_set() {
             return Err(CoreError::SessionClosed);
         }
+        let prompt = ctx.prompt.as_ref();
         let sec = self.sec();
         let mut payload = vec![segment];
         if sec != "999" && self.needs_hktan(seg_id) {
@@ -663,6 +663,9 @@ impl FinTsConnector {
             let mut approved = false;
             for _ in 0..60 {
                 tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                if ctx.cancelled.is_set() {
+                    return Err(CoreError::SessionClosed);
+                }
                 let seg = self.hktan_status(3, &task);
                 let r = self.send(ctx, vec![seg], &sec, None).await?;
                 if !approval_pending(&r) {
@@ -720,7 +723,12 @@ impl FinTsConnector {
                 Phase::Challenge(c) | Phase::Pending(c) => c.clone(),
                 _ => return Err(CoreError::protocol("no challenge to ask for")),
             };
-            match (prompt.ask(question).await?, decoupled) {
+            let answer = prompt.ask(question).await?;
+            // cancelled after the answer was given: no TAN, no status query
+            if ctx.cancelled.is_set() {
+                return Err(CoreError::SessionClosed);
+            }
+            match (answer, decoupled) {
                 (PromptAnswer::Skip, _) => {
                     return Err(CoreError::Bank {
                         code: "0030".into(),

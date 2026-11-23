@@ -2162,6 +2162,28 @@ async fn an_app_approval_during_the_fetch_is_shown_and_polled_by_the_front_end()
     assert_eq!(seen.lock().unwrap().len(), 3);
 }
 
+/// The user's side of a cancel: sets the session's flag when the first
+/// question comes, then answers it with `answer` (`None`: no answer).
+fn cancelling_prompt(
+    answer: Option<crate::connectors::PromptAnswer>,
+) -> (
+    crate::connectors::FetchPrompt,
+    crate::connectors::CancelFlag,
+    tokio::task::JoinHandle<()>,
+) {
+    let flag = crate::connectors::CancelFlag::default();
+    let (prompt, mut questions) = crate::connectors::FetchPrompt::cancelled_by(flag.clone());
+    let cancel = flag.clone();
+    let user = tokio::spawn(async move {
+        let (_, reply) = questions.recv().await.unwrap();
+        cancel.set();
+        if let Some(a) = answer {
+            let _ = reply.send(a);
+        }
+    });
+    (prompt, flag, user)
+}
+
 #[tokio::test]
 async fn after_a_cancel_during_the_fetch_nothing_more_goes_to_the_bank() {
     // #1730: the first account's TAN is cancelled; the second account's
@@ -2170,21 +2192,46 @@ async fn after_a_cancel_during_the_fetch_nothing_more_goes_to_the_bank() {
     let mut c = savings_needing_sca(&url);
     c.upd
         .push(upd_acc("0000202051", "", IBAN_B, "Tagesgeld", &["HKSAL"]));
-    let (prompt, mut questions) = crate::connectors::FetchPrompt::channel();
-    let cancel = prompt.clone();
-    let user = tokio::spawn(async move {
-        let (_, reply) = questions.recv().await.unwrap();
-        cancel.cancel();
-        drop(reply);
-    });
+    let (prompt, cancelled, user) = cancelling_prompt(None);
     let ctx = ConnectContext {
         prompt: Some(prompt),
+        cancelled,
         ..test_ctx()
     };
     let r = c.fetch(&ctx).await;
     user.await.unwrap();
     assert!(r.is_err(), "nothing was read");
     assert_eq!(seen.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn a_cancel_right_after_the_answer_sends_no_tan() {
+    // review of #1733: the TAN was typed, the cancel came before it was sent
+    let (url, seen) = mock_bank(vec![SAL_TAN_DEMANDED, SAL_A]);
+    let mut c = savings_needing_sca(&url);
+    let (prompt, cancelled, user) = cancelling_prompt(Some(crate::connectors::PromptAnswer::Code(
+        SecretString::new("123456".into()),
+    )));
+    let ctx = ConnectContext {
+        prompt: Some(prompt),
+        cancelled,
+        ..test_ctx()
+    };
+    let r = c.fetch(&ctx).await;
+    user.await.unwrap();
+    assert!(r.is_err(), "nothing was read");
+    assert_eq!(seen.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn a_cancelled_automatic_fetch_sends_nothing_more() {
+    // review of #1733: an automatic sync has no prompt, the cancel reaches it anyway
+    let (url, seen) = mock_bank(vec![SAL_A]);
+    let mut c = savings_needing_sca(&url);
+    let ctx = test_ctx();
+    ctx.cancelled.set();
+    assert!(c.fetch(&ctx).await.is_err());
+    assert!(seen.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

@@ -1747,6 +1747,7 @@ impl Vault {
             only_account,
             // set by `SyncSession` when the fetch starts
             prompt: None,
+            cancelled: Default::default(),
         };
         let mut connector = make_connector_for(kind, &key_str, demo);
         if !demo && is_comdirect_fints(&key_str) {

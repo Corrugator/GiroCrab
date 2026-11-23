@@ -29,23 +29,39 @@ pub enum PromptAnswer {
 
 type Question = (Phase, oneshot::Sender<PromptAnswer>);
 
+/// Set when the user cancels the sync (#1730). Every fetch gets it in
+/// [`ConnectContext::cancelled`], also an automatic one without a prompt: a
+/// connector checks it before each order to the bank.
+#[derive(Clone, Default)]
+pub struct CancelFlag(Arc<AtomicBool>);
+
+impl CancelFlag {
+    pub fn is_set(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn set(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+}
+
 /// Lets a connector ask the user during `fetch` (#1730). `SyncSession` puts it
 /// into [`ConnectContext::prompt`] for syncs the user started; automatic syncs
 /// (`begin_quiet_sync`) get none and must not ask.
 #[derive(Clone)]
 pub struct FetchPrompt {
     questions: mpsc::UnboundedSender<Question>,
-    cancelled: Arc<AtomicBool>,
+    cancelled: CancelFlag,
 }
 
 impl FetchPrompt {
     #[cfg(test)]
     pub(crate) fn channel() -> (Self, mpsc::UnboundedReceiver<Question>) {
-        Self::cancelled_by(Arc::new(AtomicBool::new(false)))
+        Self::cancelled_by(CancelFlag::default())
     }
 
-    /// A prompt that counts as cancelled once `cancelled` is set.
-    fn cancelled_by(cancelled: Arc<AtomicBool>) -> (Self, mpsc::UnboundedReceiver<Question>) {
+    /// A prompt that asks nothing more once `cancelled` is set.
+    pub(crate) fn cancelled_by(cancelled: CancelFlag) -> (Self, mpsc::UnboundedReceiver<Question>) {
         let (questions, rx) = mpsc::unbounded_channel();
         (
             FetchPrompt {
@@ -59,7 +75,7 @@ impl FetchPrompt {
     /// Shows `question` (`Phase::Challenge` or `Phase::Pending`) and waits for
     /// the answer. `SessionClosed` once the user cancelled the sync.
     pub async fn ask(&self, question: Phase) -> CoreResult<PromptAnswer> {
-        if self.is_cancelled() {
+        if self.cancelled.is_set() {
             return Err(CoreError::SessionClosed);
         }
         let (tx, rx) = oneshot::channel();
@@ -67,16 +83,6 @@ impl FetchPrompt {
             .send((question, tx))
             .map_err(|_| CoreError::SessionClosed)?;
         rx.await.map_err(|_| CoreError::SessionClosed)
-    }
-
-    /// The user cancelled the sync: the connector sends nothing more to the bank.
-    pub fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::SeqCst)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn cancel(&self) {
-        self.cancelled.store(true, Ordering::SeqCst);
     }
 }
 
@@ -123,7 +129,7 @@ pub struct SyncSession {
     /// Set by `cancel()` before it waits for `state`: a step that holds the
     /// state (a TAN on its way, the rest of the fetch) sees it, sends nothing
     /// more to the bank and stores nothing.
-    cancelled: Arc<AtomicBool>,
+    cancelled: CancelFlag,
     /// `None` once the sync finished, failed or was cancelled, so every
     /// later step gets `SessionClosed`.
     state: AsyncMutex<Option<State>>,
@@ -140,7 +146,7 @@ impl SyncSession {
             vault,
             kind,
             interactive: AtomicBool::new(true),
-            cancelled: Arc::new(AtomicBool::new(false)),
+            cancelled: CancelFlag::default(),
             state: AsyncMutex::new(Some(State::Login(Box::new(Active { connector, ctx })))),
         }
     }
@@ -151,7 +157,7 @@ impl SyncSession {
     }
 
     pub(super) fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::SeqCst)
+        self.cancelled.is_set()
     }
 
     /// Whether the fetch of this session may ask the user (tests of the
@@ -223,6 +229,7 @@ impl SyncSession {
             mut ctx,
         } = active;
         let (prompt, questions) = FetchPrompt::cancelled_by(self.cancelled.clone());
+        ctx.cancelled = self.cancelled.clone();
         // a quiet fetch gets no prompt: its question channel stays empty and closed
         if self.interactive.load(Ordering::SeqCst) {
             ctx.prompt = Some(prompt);
@@ -353,7 +360,7 @@ impl SyncSession {
     /// more is sent to the bank and nothing is stored, also when a step is
     /// still running (a TAN on its way): the flag is set before waiting for it.
     pub async fn cancel(&self) {
-        self.cancelled.store(true, Ordering::SeqCst);
+        self.cancelled.set();
         match self.state.lock().await.take() {
             Some(State::Login(mut a)) => a.connector.finish(&a.ctx).await,
             Some(State::Fetching(mut f)) => {

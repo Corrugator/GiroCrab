@@ -281,6 +281,9 @@ pub struct ConnectContext {
     /// by `SyncSession` for syncs the user started; `None` at login, for
     /// transfers and for automatic syncs, which must not ask.
     pub prompt: Option<super::FetchPrompt>,
+    /// Set once the user cancelled the sync (#1730): send no further order.
+    /// `SyncSession` sets it for every fetch, with or without a prompt.
+    pub cancelled: super::CancelFlag,
 }
 
 /// Document retrieval of one sync, set from the connection's settings.

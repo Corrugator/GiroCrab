@@ -222,7 +222,7 @@ impl BankConnector for SlowBank {
         prompt.ask(Phase::Challenge(code_challenge())).await?;
         let _ = self.tan_sent.take().unwrap().send(());
         self.bank.notified().await;
-        *self.saw_cancel.lock().unwrap() = Some(prompt.is_cancelled());
+        *self.saw_cancel.lock().unwrap() = Some(ctx.cancelled.is_set());
         Ok(FetchResult {
             accounts: vec![RemoteAccount {
                 external_ref: "DE89370400440532013000".into(),
@@ -268,24 +268,29 @@ async fn a_cancel_while_the_tan_is_on_its_way_stores_nothing() {
         s.start().await.unwrap(),
         SyncStep::NeedsChallenge { .. }
     ));
-    let submit = tokio::spawn({
-        let s = s.clone();
-        async move { s.submit_code("123456".into()).await }
-    });
-    sent.await.unwrap();
-    let cancel = tokio::spawn({
-        let s = s.clone();
-        async move { s.cancel().await }
-    });
-    while !s.is_cancelled() {
-        tokio::task::yield_now().await;
-    }
-    bank.notify_one();
-    assert!(matches!(
-        submit.await.unwrap(),
-        Err(CoreError::SessionClosed)
-    ));
-    cancel.await.unwrap();
-    assert_eq!(*saw_cancel.lock().unwrap(), Some(true));
-    assert_eq!(stored_accounts(&vault), 0);
+    // bounded: a cancel that waits for the running step again would hang here
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        let submit = tokio::spawn({
+            let s = s.clone();
+            async move { s.submit_code("123456".into()).await }
+        });
+        sent.await.unwrap();
+        let cancel = tokio::spawn({
+            let s = s.clone();
+            async move { s.cancel().await }
+        });
+        while !s.is_cancelled() {
+            tokio::task::yield_now().await;
+        }
+        bank.notify_one();
+        assert!(matches!(
+            submit.await.unwrap(),
+            Err(CoreError::SessionClosed)
+        ));
+        cancel.await.unwrap();
+        assert_eq!(*saw_cancel.lock().unwrap(), Some(true));
+        assert_eq!(stored_accounts(&vault), 0);
+    })
+    .await
+    .expect("the cancel must not wait for the running step");
 }
