@@ -10,6 +10,9 @@ pub const CHANNEL_KEY: &str = "updates.channel";
 pub const AUTO_KEY: &str = "updates.auto";
 pub const LAST_KEY: &str = "updates.last_check";
 const NOTES_MAX: usize = 600;
+const PER_PAGE: usize = 50;
+/// Upper bound of requests per check (250 releases).
+const MAX_PAGES: usize = 5;
 
 /// Release kind, ordered by maturity; a channel accepts every kind `>=` itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -212,8 +215,26 @@ impl Fetcher for CurlFetcher {
     }
 }
 
+/// Follows the release pages (newest first) until one holds an update for `channel`, so many
+/// newer prereleases cannot push the newest stable release out of the first page.
 pub fn check(f: &impl Fetcher, current: &str, channel: Channel) -> Result<Option<Update>, String> {
-    newest(&f.get(RELEASES_URL)?, current, channel)
+    for page in 1..=MAX_PAGES {
+        let url = if page == 1 {
+            RELEASES_URL.to_string()
+        } else {
+            format!("{RELEASES_URL}&page={page}")
+        };
+        let json = f.get(&url)?;
+        if let Some(u) = newest(&json, current, channel)? {
+            return Ok(Some(u));
+        }
+        let len =
+            serde_json::from_slice::<Vec<serde::de::IgnoredAny>>(&json).map_or(0, |l| l.len());
+        if len < PER_PAGE {
+            break; // last page
+        }
+    }
+    Ok(None)
 }
 
 /// Opens the installer / release page; only github.com is handed to the browser.
@@ -355,5 +376,40 @@ mod tests {
         assert_eq!(u.map(|u| u.version).as_deref(), Some("0.8.8"));
         assert_eq!(*f.0.borrow(), vec![RELEASES_URL.to_string()]);
         assert!(allowed_host(RELEASES_URL));
+    }
+
+    /// 50 newer nightlies on page 1, the newest stable release only on page 2.
+    struct Paged(RefCell<Vec<String>>);
+    impl Fetcher for Paged {
+        fn get(&self, url: &str) -> Result<Vec<u8>, String> {
+            self.0.borrow_mut().push(url.into());
+            let tag = |n: usize| {
+                format!(
+                    r#"{{"tag_name":"v0.9.0-nightly.{}","html_url":"https://github.com/x"}}"#,
+                    20261000 + n
+                )
+            };
+            let page = if url.ends_with("&page=2") {
+                r#"[{"tag_name":"v0.8.8","html_url":"https://github.com/x"}]"#.to_string()
+            } else {
+                format!("[{}]", (0..PER_PAGE).map(tag).collect::<Vec<_>>().join(","))
+            };
+            Ok(page.into_bytes())
+        }
+    }
+
+    #[test]
+    fn check_follows_pages_for_stable_behind_many_prereleases() {
+        let f = Paged(RefCell::default());
+        let u = check(&f, "0.8.7", Channel::Stable).unwrap();
+        assert_eq!(u.map(|u| u.version).as_deref(), Some("0.8.8"));
+        assert_eq!(
+            *f.0.borrow(),
+            vec![RELEASES_URL.to_string(), format!("{RELEASES_URL}&page=2")]
+        );
+        // nothing newer anywhere: stops at a short page, never beyond MAX_PAGES
+        let f = Paged(RefCell::default());
+        assert_eq!(check(&f, "0.8.8", Channel::Stable).unwrap(), None);
+        assert_eq!(f.0.borrow().len(), 2);
     }
 }
