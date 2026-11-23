@@ -6,6 +6,7 @@ import { GroupsState, GroupsPanel } from "groups_dialog.slint";
 import { AssetsState, AssetsLoansPanel } from "assets_loans_dialog.slint";
 import { MandatesState, MdRow, MandatesPanel } from "mandates_dialog.slint";
 import { SettingsImportState, SiRow, SettingsImportPanel } from "settings_import_dialog.slint";
+import { AmountFilterButton, AmountFilterRow } from "amount_filter.slint";
 export { GroupsState }
 export { SettingsImportState, SiRow }
 export { AssetsState }
@@ -1041,6 +1042,16 @@ export component MainWindow inherits Window {
     callback select-account(int);
     callback sync();
     callback search-changed();
+    in property <string> amount-filter-title: "Betrag";
+    in property <bool> amount-filter-active;
+    in property <bool> amount-filter-masked;
+    in property <string> amount-filter-error;
+    in-out property <bool> amount-filter-open;
+    in-out property <string> amount-from;
+    in-out property <string> amount-to;
+    in-out property <int> amount-direction;
+    callback amount-filter-apply(string, string, int);
+    callback amount-filter-reset();
     callback bank-search(string);
     callback bank-add(int, string);
     callback tan-submit(string);
@@ -1391,6 +1402,20 @@ export component MainWindow inherits Window {
                     current-index <=> root.tag-index;
                     selected => { root.search-changed(); }
                 }
+                AmountFilterButton {
+                    title: root.amount-filter-title;
+                    active: root.amount-filter-active;
+                    open <=> root.amount-filter-open;
+                    reset => { root.amount-filter-reset(); }
+                }
+            }
+            if root.view-mode == 0 && root.amount-filter-open: AmountFilterRow {
+                masked: root.amount-filter-masked;
+                error: root.amount-filter-error;
+                from-text <=> root.amount-from;
+                to-text <=> root.amount-to;
+                direction-index <=> root.amount-direction;
+                apply(f, t, d) => { root.amount-filter-apply(f, t, d); }
             }
             if root.view-mode == 0: HorizontalLayout {
                 spacing: 6px;
