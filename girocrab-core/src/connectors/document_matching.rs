@@ -136,10 +136,7 @@ fn comdirect_subjects(title: &str, text: &str) -> Vec<String> {
     out
 }
 
-/// The direction of a document (`Some(true)` a credit: a sale, a dividend, interest; `Some(false)` a
-/// debit: a purchase, a savings plan; `None` no event word), from the first event word in its title and
-/// the first `text_chars` characters of its text. Boilerplate further down ("Kauf und Verkauf …") is not
-/// read, so how far the head reaches is the bank's call. Shared by Trade Republic and comdirect.
+/// Splits a title into the text before the first '(' and the contents of each top-level parenthesised group (nested parentheses stay inside their group).
 fn split_event_and_parenthesized(title: &str) -> (&str, Vec<&str>) {
     let Some((event, _)) = title.split_once('(') else {
         return (title, Vec::new());
@@ -168,6 +165,7 @@ fn split_event_and_parenthesized(title: &str) -> (&str, Vec<&str>) {
     (event, groups)
 }
 
+/// Masks the excluded names in `text`, then calls `inflow_in`.
 pub(crate) fn inflow_in_without(
     title: &str,
     text: &str,
@@ -190,6 +188,10 @@ pub(crate) fn inflow_in_without(
     inflow_in(title, &body, text_chars)
 }
 
+/// The direction of a document (`Some(true)` a credit: a sale, a dividend, interest; `Some(false)` a
+/// debit: a purchase, a savings plan; `None` no event word), from the first event word in its title and
+/// the first `text_chars` characters of its text. Boilerplate further down ("Kauf und Verkauf …") is not
+/// read, so how far the head reaches is the bank's call. Shared by Trade Republic and comdirect.
 pub(crate) fn inflow_in(title: &str, text: &str, text_chars: usize) -> Option<bool> {
     let head: String = title
         .chars()
