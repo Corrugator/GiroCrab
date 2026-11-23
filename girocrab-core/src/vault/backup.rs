@@ -257,7 +257,7 @@ impl Vault {
         let later = now + 1;
         let deleted_under_live = "SELECT id, deleted_ms FROM accounts
              WHERE deleted_ms IS NOT NULL AND deleted_ms < ?1
-               AND connection_id IN (SELECT id FROM bank_connections WHERE deleted_ms IS NULL)";
+               AND connection_id IN (SELECT id FROM bank_connections WHERE deleted_ms IS NULL AND IFNULL(created_ms, 0) < accounts.deleted_ms)";
         // the cascade first: it is found by the account's old deletion stamp
         conn.execute(
             &format!(

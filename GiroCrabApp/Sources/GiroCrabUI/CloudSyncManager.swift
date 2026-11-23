@@ -290,8 +290,13 @@ public final class CloudSyncManager {
         _ = autoState.tick(changeCount: vault.changeCount(), now: Date())
     }
 
+    @ObservationIgnored var onTestingRunEntered: (@MainActor () -> Void)?
+    @ObservationIgnored var testingRunGate: (@MainActor () async -> Void)?
+
     func runForTesting(write: Bool, poll: Bool) async {
         guard let autoVault else { return }
+        onTestingRunEntered?()
+        if let testingRunGate { await testingRunGate() }
         await run(vault: autoVault, write: write, poll: poll)
     }
 
@@ -405,6 +410,7 @@ public final class CloudSyncManager {
             } else if isSyncing || autoBusy {
                 try? await Task.sleep(for: .milliseconds(100))
             } else {
+                guard isEnabled else { return false }
                 return await sync(vault: vault, onStart: onStart)
             }
         }

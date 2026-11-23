@@ -388,14 +388,22 @@ final class CloudSyncTests: XCTestCase {
         defer { sync.setFolderForTesting(nil); sync.stopAutoSync() }
         sync.prepareAutoSyncForTesting(vault: v)
         let started = StartLog()
+        var enteredPoll: CheckedContinuation<Void, Never>?
+        var releasePoll: CheckedContinuation<Void, Never>?
+        sync.onTestingRunEntered = { enteredPoll?.resume(); enteredPoll = nil }
+        sync.testingRunGate = { await withCheckedContinuation { releasePoll = $0 } }
+        defer { sync.onTestingRunEntered = nil; sync.testingRunGate = nil; releasePoll?.resume() }
         let polling = Task { await sync.runForTesting(write: false, poll: true) }
-        for _ in 0..<1000 where !sync.isAutoBusy { await Task.yield() }
-        XCTAssertTrue(sync.isAutoBusy, "the poll should be running")
+        await withCheckedContinuation { enteredPoll = $0 }
         let restore = Task { await sync.syncWhenIdle(vault: v) { started.names.append("restore") } }
-        await Task.yield()
-        XCTAssertTrue(started.names.isEmpty, "the restore sync waits for the poll")
-        // another manual sync starts between the wait and the restore sync
-        let other = Task { await sync.sync(vault: v) { started.names.append("other") } }
+        // another manual sync starts while the poll holds the turn; release once it entered onStart
+        let other = Task {
+            await sync.sync(vault: v) {
+                started.names.append("other")
+                releasePoll?.resume()
+                releasePoll = nil
+            }
+        }
         let otherRan = await other.value
         let restoreRan = await restore.value
         await polling.value

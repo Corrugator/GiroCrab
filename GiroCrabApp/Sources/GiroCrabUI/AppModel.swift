@@ -1632,7 +1632,9 @@ public final class AppModel {
     private func performSyncOrAutoAdopt(vault v: Vault, whenIdle onStart: (@MainActor () -> Void)? = nil) async -> Bool {
         let ran: Bool
         if let onStart {
+            guard ownVault === v else { return false }
             ran = await CloudSyncManager.shared.syncWhenIdle(vault: v, onStart: onStart)
+            guard ownVault === v else { return ran }
         } else {
             ran = await CloudSyncManager.shared.sync(vault: v)
         }
