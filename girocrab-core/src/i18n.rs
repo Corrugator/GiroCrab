@@ -1874,6 +1874,7 @@ fn english(de: &str) -> Option<&'static str> {
         "Gutschrift" => "Credit",
         "Bestellung" => "Order",
         "Erstattung" => "Refund",
+        "Zahlung" => "Payment",
         "Überweisung" => "Transfer",
         "Buchung" => "Transaction",
         "Ordner nicht gefunden: {0}" => "Folder not found: {0}",
