@@ -710,8 +710,10 @@ impl FinTsConnector {
             self.st.init_without_hktan = false;
             self.st.sec_func = code.clone();
             self.st.tan_method_name = name;
-            if let Some(reply) = self.init_attempt(ctx, &code).await? {
-                return Ok(Some(reply));
+            match self.init_attempt(ctx, &code).await? {
+                Ok(reply) => return Ok(Some(reply)),
+                Err(true) => return Ok(None),
+                Err(false) => {}
             }
         }
         crate::depot_debug::log(&format!(
@@ -720,7 +722,7 @@ impl FinTsConnector {
         self.st.sec_func = refused.0.clone();
         self.st.tan_method_name = refused.1.clone();
         self.st.init_without_hktan = true;
-        self.init_attempt(ctx, refused_code).await
+        Ok(self.init_attempt(ctx, refused_code).await?.ok())
     }
 
     /// A fresh dialog init; the answer if it has no errors and opened a dialog, otherwise the
@@ -729,16 +731,17 @@ impl FinTsConnector {
         &mut self,
         ctx: &ConnectContext,
         sec: &str,
-    ) -> CoreResult<Option<BankReply>> {
+    ) -> CoreResult<Result<BankReply, bool>> {
         self.reset_dialog();
         let reply = self.send_dialog_init(ctx, sec).await?;
         if reply.errors().is_empty() && self.dialog_id != "0" {
-            return Ok(Some(reply));
+            return Ok(Ok(reply));
         }
+        let stop = reply.has("9930") || reply.has("9931") || reply.has("9942");
         if !reply.has("9800") {
             self.end_dialog(ctx, sec).await;
         }
-        Ok(None)
+        Ok(Err(stop))
     }
 
     pub(super) fn sec(&self) -> String {

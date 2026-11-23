@@ -395,6 +395,19 @@ async fn dialog_init_9110_with_no_working_variant_keeps_the_state() {
 }
 
 #[tokio::test]
+async fn dialog_init_9110_stops_at_a_9931_reply() {
+    let (url, seen) = mock_bank(vec![REJECT_9110, STALE_SYSTEM_ID]);
+    let state = state_with_functions("913", &[("913", "chipTAN QR"), ("911", "chipTAN optisch")]);
+    let mut c = two_step_connector(&url, state);
+    assert!(c.open_dialog(&test_ctx()).await.is_err());
+    // the original and the other function; the init without HKTAN is not tried
+    assert_eq!(seen.lock().unwrap().len(), 2);
+    assert_eq!(c.st.sec_func, "913");
+    assert!(c.st.tan_method_name.is_empty());
+    assert!(!c.st.init_without_hktan);
+}
+
+#[tokio::test]
 async fn dialog_init_9110_about_another_segment_is_not_retried() {
     const OTHER: &str = "HNHBK:1:3+000000000000+300+0+1'HIRMG:2:2+9800::Dialog abgebrochen+9110::Falsche Segmentzusammenstellung (HKVVB)'";
     let (url, seen) = mock_bank(vec![OTHER]);
