@@ -343,6 +343,25 @@ async fn dialog_init_9110_falls_back_to_init_without_hktan_and_persists() {
 }
 
 #[tokio::test]
+async fn dialog_init_9110_reply_with_a_function_list_supplies_the_alternatives() {
+    const WITH_LIST: &str = "HNHBK:1:3+000000000000+300+0+1'HIRMG:2:2+9050::Die Nachricht enthält Fehler.+9800::Dialog abgebrochen+9110::Falsche Segmentzusammenstellung (HKTAN, segvers=7, option=913)'HIRMS:3:2:3+3920::Zugelassene Zwei-Schritt-Verfahren:913:911'";
+    let (url, seen) = mock_bank(vec![WITH_LIST, ACCEPT]);
+    // an older saved state: no function list yet
+    let mut c = two_step_connector(&url, state_with_functions("913", &[]));
+    assert!(matches!(
+        c.open_dialog(&test_ctx()).await.unwrap(),
+        Phase::Ready
+    ));
+    {
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.len(), 2);
+        assert!(has_hktan(&seen[1]), "the other function, with HKTAN");
+    }
+    assert_eq!(c.sec(), "911");
+    assert!(!c.st.init_without_hktan);
+}
+
+#[tokio::test]
 async fn dialog_init_9110_without_hktan_after_failed_alternative_keeps_the_refused_function() {
     let (url, seen) = mock_bank(vec![REJECT_9110, REJECT_9110, ACCEPT]);
     let mut state =

@@ -629,6 +629,11 @@ impl FinTsConnector {
         // The bank refuses our HKTAN as a wrong segment combination (#1641): another of its
         // two-step functions, or the init without HKTAN, may be taken.
         if sec != "999" && init_rejected_as_wrong_segments(&reply) {
+            // no function list from an earlier sync: the refusal may carry one (3920)
+            if self.st.tan_functions.is_empty() {
+                self.learn_bpd(&reply);
+                sec = self.sec();
+            }
             let (retry, accepted) = self.retry_init_without_refused_hktan(ctx).await?;
             if accepted || ends_hktan_retry(&retry) {
                 reply = retry;
