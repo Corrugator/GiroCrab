@@ -463,6 +463,10 @@ public final class CloudSyncManager {
             }
             lastSync = Date()
             defaults.set(lastSync, forKey: K.last)
+            // Ein erfolgreiches Schreiben ersetzt den Hinweis „Noch nichts in iCloud gespeichert“.
+            // Ein Merge im selben Lauf überschreibt den Text anschließend über `record`.
+            lastStats = Self.writtenText(location)
+            defaults.set(lastStats, forKey: K.stats)
         }
         if let error = outcome.error { lastError = error }
         if let merge = outcome.merge {
