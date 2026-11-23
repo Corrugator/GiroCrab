@@ -2114,6 +2114,14 @@ fn main() -> Result<(), slint::PlatformError> {
             with_state(|st| *st = State::default());
             win.set_unlocked(false);
             win.set_days(ModelRc::new(VecModel::from(Vec::<DayGroup>::new())));
+            // Selection summary: no amounts may outlive the vault.
+            win.set_marked_count(0);
+            win.set_selection_summary_visible(false);
+            win.set_selection_count_text("".into());
+            win.set_selection_income("".into());
+            win.set_selection_expense("".into());
+            win.set_selection_balance("".into());
+            win.set_selection_extra("".into());
             win.set_accounts(ModelRc::new(VecModel::from(Vec::<AccountRow>::new())));
             win.set_has_inspector(false);
             views_ui::on_lock(&win);
