@@ -1363,6 +1363,25 @@ QtObject {
         }
         return sections.filter(s => s.accounts.length > 0)
     }
+    /// AccountGroupsModel.swift (#954): the other accounts carrying the same name (two "Konto flex"
+    /// of different holders).
+    function namesakes(a) { return Object.values(accountsByID).filter(o => o.id !== a.id && o.name === a.name) }
+    function hasNamesake(a) { return namesakes(a).length > 0 }
+    /// What tells the account apart from its namesakes: its owner, or – when it has none or a
+    /// namesake has the same – the end of its IBAN / account number. Empty without a namesake.
+    function accountDistinction(a) {
+        const others = namesakes(a)
+        if (!others.length) return ""
+        const owner = a.owner || ""
+        if (owner !== "" && !others.some(o => (o.owner || "") === owner)) return owner
+        const number = (a.iban ? a.iban : (a.account_number || "")).replace(/\s/g, "")
+        return number === "" ? owner : "…" + number.slice(-4)
+    }
+    /// The account's name, with what tells it apart when another account has the same name.
+    function accountLabel(a) {
+        const d = accountDistinction(a)
+        return d === "" ? a.name : a.name + " · " + d
+    }
     /// Combo box entries: "Alle Konten", then each section title and its accounts (`label(a)`).
     function accountMenuOptions(label, withoutAccount) {
         const out = [{ id: null, title: qsTr("Alle Konten") }]
@@ -2507,7 +2526,7 @@ QtObject {
     /// ManualLoanAccountMenu: "Darlehen bearbeiten …" / "Stand neu setzen …" apply.
     function isEditableManualLoan(a) { return !!a && a.kind === "Loan" && manualLoan(a.id) !== null && a.archived_unix === null }
 
-    /// OpeningBalanceMenuItem: "Startsaldo …" applies to computed balances only.
+    /// AccountSettingsView › showsOpeningBalance: the Startsaldo applies to computed balances only.
     function canSetOpeningBalance(a) { return !!a && a.balance_derived && a.archived_unix === null }
     function openOpeningBalance(a) { openingBalanceRequest = { accountId: a.id } }
     /// Sets (or clears with `null`) the Startsaldo; `date` "" = all bookings. Throws on failure.
@@ -2820,22 +2839,19 @@ QtObject {
         toast = qsTr("Gruppe „%1“ gelöscht").arg(g.name)
     }
     function renameAccount(id, name) {
-        if (run(() => { core("rename_account", { account_id: id, name: name }); return true })) { reloadAccounts(); reloadBookings() }
+        if (run(() => { core("rename_account", { account_id: id, name: name }); return true })) { reloadAccounts(); reloadBookings(); return true } else return false
     }
     /// AccountGroupsModel.swift › setAccountOwner: empty clears it.
     function setAccountOwner(id, owner) {
-        if (run(() => { core("set_account_owner", { account_id: id, owner: owner }); return true })) reloadAccounts()
+        if (run(() => { core("set_account_owner", { account_id: id, owner: owner }); return true })) { reloadAccounts(); return true } else return false
     }
     /// AppModel.swift › setAccountNote: empty clears it; synced like the name (#980).
     function setAccountNote(id, note) {
-        if (run(() => { core("set_account_note", { account_id: id, note: note }); return true })) reloadAccounts()
+        if (run(() => { core("set_account_note", { account_id: id, note: note }); return true })) { reloadAccounts(); return true } else return false
     }
-    /// AccountGroupsModel.swift › setAccountKind ("Kontoart ändern …").
+    /// AccountGroupsModel.swift › setAccountKind (Kontoeinstellungen).
     function setAccountKind(id, kind) {
-        // the kind decides what "Verfügbar" and its history count (Bausparen does not, #1630) and
-        // moves the account to another section: once the accounts with the new kind are published,
-        // the history and the selection (list and sums of a section) reload
-        if (run(() => { core("set_account_kind", { account_id: id, kind: kind }); return true })) { reloadAccounts(() => { reloadHistory(); reloadSelection(false) }); reloadDashboard() }
+        if (run(() => { core("set_account_kind", { account_id: id, kind: kind }); return true })) { reloadAccounts(() => { reloadHistory(); reloadSelection(false) }); reloadDashboard(); return true } else return false
     }
     /// AccountKind.importChoices with their labels.
     readonly property var accountKindChoices: [
