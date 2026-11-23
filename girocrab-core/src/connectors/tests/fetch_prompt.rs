@@ -77,13 +77,19 @@ impl BankConnector for Asking {
     }
 }
 
-fn session(questions: usize) -> (SyncSession, Arc<Vault>, Arc<Mutex<Seen>>) {
+/// A fresh vault with one FinTS login; returns the vault and the login's id.
+fn test_vault() -> (Arc<Vault>, i64) {
     let dir = crate::test_support::thread_temp_path("gc-fetch-prompt");
     std::fs::create_dir_all(&dir).unwrap();
     let vault = Vault::open(dir.join("v.db").to_string_lossy().into(), vec![7u8; 32]).unwrap();
     let connection_id = vault
         .add_bank_connection(ConnectorKind::FinTsGeneric, String::new(), "login".into())
         .unwrap();
+    (vault, connection_id)
+}
+
+fn session(questions: usize) -> (SyncSession, Arc<Vault>, Arc<Mutex<Seen>>) {
+    let (vault, connection_id) = test_vault();
     let seen = Arc::new(Mutex::new(Seen::default()));
     let ctx = ConnectContext {
         connection_id,
@@ -157,6 +163,27 @@ async fn an_automatic_sync_gets_no_prompt() {
     ));
     assert_eq!(seen.lock().unwrap().had_prompt, Some(false));
     assert_eq!(stored_accounts(&vault), 1);
+}
+
+#[tokio::test]
+async fn begin_quiet_sync_starts_a_session_that_asks_nobody() {
+    // with `an_automatic_sync_gets_no_prompt`: no prompt reaches the fetch
+    let (vault, connection_id) = test_vault();
+    let s = vault
+        .clone()
+        .begin_quiet_sync(connection_id, String::new(), true)
+        .unwrap();
+    assert!(!s.is_interactive());
+}
+
+#[tokio::test]
+async fn begin_sync_starts_a_session_that_may_ask() {
+    let (vault, connection_id) = test_vault();
+    let s = vault
+        .clone()
+        .begin_sync(connection_id, String::new(), true)
+        .unwrap();
+    assert!(s.is_interactive());
 }
 
 #[tokio::test]

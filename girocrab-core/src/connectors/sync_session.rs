@@ -137,6 +137,13 @@ impl SyncSession {
         self.interactive.store(false, Ordering::SeqCst);
     }
 
+    /// Whether the fetch of this session may ask the user (tests of the
+    /// `Vault::begin_*` entry points).
+    #[cfg(test)]
+    pub(super) fn is_interactive(&self) -> bool {
+        self.interactive.load(Ordering::SeqCst)
+    }
+
     /// Copy of the prepared login context (settings, PIN, connector state),
     /// e.g. to reuse the sync set-up for a transfer.
     pub(super) fn clone_context(&self) -> CoreResult<ConnectContext> {
