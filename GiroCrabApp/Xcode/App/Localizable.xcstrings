@@ -8646,13 +8646,13 @@
         }
       }
     },
-    "Blendet Saldoverlauf, Cashflow und Budgets über der Buchungsliste aus. Auch im Menü Ansicht umschaltbar." : {
+    "Blendet die Kennzahlen (Konsumausgaben, Investiert, Einnahmen, Fixkosten offen) und die Cashflow-Karte über der Buchungsliste aus. Das Diagramm hat mit „Diagramm anzeigen“ einen eigenen Schalter. Budgets bleiben unabhängig und haben ebenfalls einen eigenen Schalter. Auch im Menü Ansicht umschaltbar." : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hides the balance history, cash flow and budgets above the booking list. Also available in the View menu."
+            "value" : "Hides the KPIs (Consumption, Invested, Income, Open Fixed Costs) and the cash flow card above the booking list. The header chart has its own \"Show Chart\" switch. Budgets are independent and have their own switch too. Also available in the View menu."
           }
         }
       }
