@@ -51,6 +51,10 @@ This is such a path, and other connectors can run into it too.
   challenge. An answer is passed on, and driving continues. The session does not use
   `tokio::spawn`: Windows drives it with a `current_thread` runtime through `block_on`,
   and nothing has to run between two calls because the fetch waits for the user.
+- **Cancelling never waits for a running step.** `cancel()` sets the session's cancel flag
+  before it waits for the session state, which a step holds while a TAN is on its way. The
+  prompt shares that flag: the connector sends no further order, and the session stores
+  nothing once the fetch ends.
 - **FinTS asks in `request`, the one place that sends orders.**
   - `0030` with an `HITAN` task reference: ask with the challenge from `challenge_from`,
     then send the TAN with `HKTAN` process 2 (the `respond` code path, extracted into one

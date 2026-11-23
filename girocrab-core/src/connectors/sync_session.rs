@@ -39,13 +39,21 @@ pub struct FetchPrompt {
 }
 
 impl FetchPrompt {
+    #[cfg(test)]
     pub(crate) fn channel() -> (Self, mpsc::UnboundedReceiver<Question>) {
+        Self::cancelled_by(Arc::new(AtomicBool::new(false)))
+    }
+
+    /// A prompt that counts as cancelled once `cancelled` is set.
+    fn cancelled_by(cancelled: Arc<AtomicBool>) -> (Self, mpsc::UnboundedReceiver<Question>) {
         let (questions, rx) = mpsc::unbounded_channel();
-        let prompt = FetchPrompt {
-            questions,
-            cancelled: Arc::new(AtomicBool::new(false)),
-        };
-        (prompt, rx)
+        (
+            FetchPrompt {
+                questions,
+                cancelled,
+            },
+            rx,
+        )
     }
 
     /// Shows `question` (`Phase::Challenge` or `Phase::Pending`) and waits for
@@ -66,6 +74,7 @@ impl FetchPrompt {
         self.cancelled.load(Ordering::SeqCst)
     }
 
+    #[cfg(test)]
     pub(crate) fn cancel(&self) {
         self.cancelled.store(true, Ordering::SeqCst);
     }
@@ -88,7 +97,6 @@ struct Fetching {
     questions: mpsc::UnboundedReceiver<Question>,
     /// Where the answer to the question shown goes.
     open: Option<oneshot::Sender<PromptAnswer>>,
-    prompt: FetchPrompt,
     connection_id: i64,
     only_account: Option<String>,
 }
@@ -112,6 +120,10 @@ pub struct SyncSession {
     kind: ConnectorKind,
     /// The user started this sync and can answer questions during the fetch.
     interactive: AtomicBool,
+    /// Set by `cancel()` before it waits for `state`: a step that holds the
+    /// state (a TAN on its way, the rest of the fetch) sees it, sends nothing
+    /// more to the bank and stores nothing.
+    cancelled: Arc<AtomicBool>,
     /// `None` once the sync finished, failed or was cancelled, so every
     /// later step gets `SessionClosed`.
     state: AsyncMutex<Option<State>>,
@@ -128,6 +140,7 @@ impl SyncSession {
             vault,
             kind,
             interactive: AtomicBool::new(true),
+            cancelled: Arc::new(AtomicBool::new(false)),
             state: AsyncMutex::new(Some(State::Login(Box::new(Active { connector, ctx })))),
         }
     }
@@ -135,6 +148,10 @@ impl SyncSession {
     /// Automatic sync: nobody answers, so the fetch asks no questions.
     pub(super) fn set_quiet(&self) {
         self.interactive.store(false, Ordering::SeqCst);
+    }
+
+    pub(super) fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::SeqCst)
     }
 
     /// Whether the fetch of this session may ask the user (tests of the
@@ -171,6 +188,12 @@ impl SyncSession {
             Some(State::Login(a)) => a,
             _ => unreachable!("checked above"),
         };
+        // cancelled while the bank answered: no fetch, no challenge
+        if self.is_cancelled() {
+            let mut a = close(&mut st);
+            a.connector.finish(&a.ctx).await;
+            return Err(CoreError::SessionClosed);
+        }
         match phase {
             Ok(Phase::Challenge(c)) => Ok(SyncStep::NeedsChallenge { challenge: c }),
             Ok(Phase::Pending(c)) => Ok(SyncStep::StillWaiting { challenge: c }),
@@ -199,9 +222,10 @@ impl SyncSession {
             mut connector,
             mut ctx,
         } = active;
-        let (prompt, questions) = FetchPrompt::channel();
+        let (prompt, questions) = FetchPrompt::cancelled_by(self.cancelled.clone());
+        // a quiet fetch gets no prompt: its question channel stays empty and closed
         if self.interactive.load(Ordering::SeqCst) {
-            ctx.prompt = Some(prompt.clone());
+            ctx.prompt = Some(prompt);
         }
         let (connection_id, only_account) = (ctx.connection_id, ctx.only_account.clone());
         let kind = self.kind;
@@ -215,13 +239,13 @@ impl SyncSession {
             run,
             questions,
             open: None,
-            prompt,
             connection_id,
             only_account,
         }
     }
 
-    /// Drives the fetch until it asks the user or ends; stores its result.
+    /// Drives the fetch until it asks the user or ends; stores its result
+    /// unless the sync was cancelled meanwhile.
     async fn drive(&self, st: &mut Option<State>) -> CoreResult<SyncStep> {
         loop {
             let Some(State::Fetching(f)) = st.as_mut() else {
@@ -233,6 +257,8 @@ impl SyncSession {
                 Some(q) = f.questions.recv() => Driven::Asked(q),
             };
             match driven {
+                // cancelled meanwhile: the question ends with `SessionClosed`
+                Driven::Asked(_) if self.is_cancelled() => {}
                 Driven::Asked((Phase::Challenge(c), reply)) => {
                     f.open = Some(reply);
                     return Ok(SyncStep::NeedsChallenge { challenge: c });
@@ -249,6 +275,10 @@ impl SyncSession {
                     let Some(State::Fetching(f)) = st.take() else {
                         unreachable!("checked above")
                     };
+                    // `finish` already ended the bank dialog
+                    if self.is_cancelled() {
+                        return Err(CoreError::SessionClosed);
+                    }
                     let mut data = (*fetched)?;
                     if let Some(only) = &f.only_account {
                         data.keep_only(only);
@@ -320,12 +350,13 @@ impl SyncSession {
     }
 
     /// Cancels the sync and closes the bank dialog. During the fetch nothing
-    /// more is sent to the bank and nothing is stored.
+    /// more is sent to the bank and nothing is stored, also when a step is
+    /// still running (a TAN on its way): the flag is set before waiting for it.
     pub async fn cancel(&self) {
+        self.cancelled.store(true, Ordering::SeqCst);
         match self.state.lock().await.take() {
             Some(State::Login(mut a)) => a.connector.finish(&a.ctx).await,
             Some(State::Fetching(mut f)) => {
-                f.prompt.cancel();
                 // the open question ends with `SessionClosed`
                 drop(f.open.take());
                 // let the fetch run out: its requests fail before sending, and

@@ -200,3 +200,92 @@ async fn a_login_challenge_cannot_be_skipped() {
     ));
     assert_eq!(seen.lock().unwrap().had_prompt, Some(true));
 }
+
+/// Asks once; after the answer it waits for `bank` (the TAN on its way), then
+/// notes whether the sync was cancelled meanwhile before its next request.
+struct SlowBank {
+    bank: Arc<tokio::sync::Notify>,
+    tan_sent: Option<tokio::sync::oneshot::Sender<()>>,
+    saw_cancel: Arc<Mutex<Option<bool>>>,
+}
+
+#[async_trait]
+impl BankConnector for SlowBank {
+    async fn begin(&mut self, _ctx: &ConnectContext) -> CoreResult<Phase> {
+        Ok(Phase::Ready)
+    }
+    async fn respond(&mut self, _: &ConnectContext, _: ChallengeResponse) -> CoreResult<Phase> {
+        Err(CoreError::protocol("no login challenge"))
+    }
+    async fn fetch(&mut self, ctx: &ConnectContext) -> CoreResult<FetchResult> {
+        let prompt = ctx.prompt.as_ref().unwrap();
+        prompt.ask(Phase::Challenge(code_challenge())).await?;
+        let _ = self.tan_sent.take().unwrap().send(());
+        self.bank.notified().await;
+        *self.saw_cancel.lock().unwrap() = Some(prompt.is_cancelled());
+        Ok(FetchResult {
+            accounts: vec![RemoteAccount {
+                external_ref: "DE89370400440532013000".into(),
+                name: "Tagesgeld".into(),
+                owner: String::new(),
+                iban: "DE89370400440532013000".into(),
+                account_number: String::new(),
+                currency: "EUR".into(),
+                kind: AccountKind::Savings,
+                balance_cents: 100,
+                balance_date: "2026-11-23".into(),
+            }],
+            ..Default::default()
+        })
+    }
+}
+
+#[tokio::test]
+async fn a_cancel_while_the_tan_is_on_its_way_stores_nothing() {
+    // review of #1733: `submit_code` holds the session while the bank answers;
+    // a cancel then must still stop further requests and the storing
+    let (vault, connection_id) = test_vault();
+    let bank = Arc::new(tokio::sync::Notify::new());
+    let (tan_sent, sent) = tokio::sync::oneshot::channel();
+    let saw_cancel = Arc::new(Mutex::new(None));
+    let connector = SlowBank {
+        bank: bank.clone(),
+        tan_sent: Some(tan_sent),
+        saw_cancel: saw_cancel.clone(),
+    };
+    let ctx = ConnectContext {
+        connection_id,
+        since: "2026-01-01".into(),
+        ..Default::default()
+    };
+    let s = Arc::new(SyncSession::new(
+        vault.clone(),
+        ConnectorKind::FinTsGeneric,
+        Box::new(connector),
+        ctx,
+    ));
+    assert!(matches!(
+        s.start().await.unwrap(),
+        SyncStep::NeedsChallenge { .. }
+    ));
+    let submit = tokio::spawn({
+        let s = s.clone();
+        async move { s.submit_code("123456".into()).await }
+    });
+    sent.await.unwrap();
+    let cancel = tokio::spawn({
+        let s = s.clone();
+        async move { s.cancel().await }
+    });
+    while !s.is_cancelled() {
+        tokio::task::yield_now().await;
+    }
+    bank.notify_one();
+    assert!(matches!(
+        submit.await.unwrap(),
+        Err(CoreError::SessionClosed)
+    ));
+    cancel.await.unwrap();
+    assert_eq!(*saw_cancel.lock().unwrap(), Some(true));
+    assert_eq!(stored_accounts(&vault), 0);
+}
