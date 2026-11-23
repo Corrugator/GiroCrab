@@ -66,6 +66,9 @@ pub struct SyncSummary {
     /// Parts of this sync that failed while the rest was stored (#1083), one
     /// text each, accounts by name: e.g. bookings the bank wanted a TAN for.
     pub warnings: Vec<String>,
+    /// Advice that goes with `warnings` (#1627): what the user can do about it.
+    /// Names no account, so a sync notice can show it as it is.
+    pub hints: Vec<String>,
 }
 
 #[derive(Debug, Clone, uniffi::Enum)]
@@ -274,6 +277,13 @@ pub struct ConnectContext {
     /// (#1124): the result is cut down to it in [`FetchResult::keep_only`];
     /// connectors that request accounts one by one (FinTS) ask only for it.
     pub only_account: Option<String>,
+    /// Asks the user for a TAN or an app approval during `fetch` (#1730). Set
+    /// by `SyncSession` for syncs the user started; `None` at login, for
+    /// transfers and for automatic syncs, which must not ask.
+    pub prompt: Option<super::FetchPrompt>,
+    /// Set once the user cancelled the sync (#1730): send no further order.
+    /// `SyncSession` sets it for every fetch, with or without a prompt.
+    pub cancelled: super::CancelFlag,
 }
 
 /// Document retrieval of one sync, set from the connection's settings.
@@ -624,6 +634,9 @@ pub struct FetchResult {
     /// as done and reports them. An account's external ref in a text is
     /// replaced by the account's name when storing.
     pub warnings: Vec<String>,
+    /// What the user can do about `warnings` (#1627), already in the UI language
+    /// and without account names.
+    pub hints: Vec<String>,
 }
 
 impl FetchResult {

@@ -69,8 +69,11 @@ use base64::Engine;
 use serde::{Deserialize, Serialize};
 
 use self::accounts::{account_label, kind_from_code};
-use self::dialog::{approval_pending, has_so_prefix, is_comdirect, tan_demanded};
-use self::syntax::{Segment, SegmentBuilder};
+use self::dialog::{
+    approval_pending, has_so_prefix, is_comdirect, period_hint, tan_beyond_free_period,
+    tan_demanded,
+};
+use self::syntax::Segment;
 use super::{
     BankConnector, BatchTransferJob, Challenge, ChallengeResponse, ConnectContext, DebitJob,
     FetchResult, PayeeMatch, Phase, RemoteAccount, StandingOrderJob, TransferJob, TransferResult,
@@ -90,6 +93,14 @@ struct FinTsState {
     sec_func: String,
     tan_method_name: String,
     tan_medium: String,
+    /// Two-step functions the bank allows this user (3920) with their names, in the bank's
+    /// order: what the login falls back to when it refuses our HKTAN (9110, #1641).
+    #[serde(default)]
+    tan_functions: Vec<(String, String)>,
+    /// The bank refuses HKTAN in the dialog init (9110) but takes the init without it under
+    /// the two-step signature; orders still carry HKTAN (#1641).
+    #[serde(default)]
+    init_without_hktan: bool,
     /// Supported versions per business transaction (from BPD "...S" segments).
     versions: HashMap<String, Vec<u32>>,
     /// HKxxx -> TAN required (HIPINS).
@@ -115,9 +126,13 @@ struct FinTsState {
     #[serde(default)]
     kku_storage_days: i64,
     /// pain.001 descriptors per transfer transaction (HKCCS/HKIPZ/HKCSE) from the BPD
-    /// parameter segments HICCSS / HIIPZS / HICSES.
+    /// parameter segments HICCSS / HIIPZS / HICSES and HISPAS. Valid for `bpd_version`:
+    /// a new BPD version replaces them (a withdrawn schema must stop being chosen).
     #[serde(default)]
     pain_formats: HashMap<String, Vec<String>>,
+    /// BPD version (HIBPA) the `pain_formats` were learned from, "" = unknown.
+    #[serde(default)]
+    bpd_version: String,
     /// Batch transfer parameters from HICCMS; `None` = not offered.
     #[serde(default)]
     batch_params: Option<transfer::BatchParams>,
@@ -183,6 +198,8 @@ struct SepaAccount {
     account_number: String,
     sub_account: String,
     blz: String,
+    /// The bank wants the account in KTI as IBAN:BIC:Konto:Unterkonto:280:BLZ (Postbank, #1702).
+    full_kti: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -476,15 +493,7 @@ impl BankConnector for FinTsConnector {
         match response {
             ChallengeResponse::ConfirmPayee => unreachable!(),
             ChallengeResponse::Poll => {
-                let seg = SegmentBuilder::new("HKTAN", n, self.version("HKTAN"))
-                    .raw("S")
-                    .raw("")
-                    .raw("")
-                    .raw("")
-                    .de(&[&task])
-                    .raw("N")
-                    .build();
-                payload.push(seg);
+                payload.push(self.hktan_status(n, &task));
                 let reply = self.send(ctx, payload, &sec, None).await?;
                 if approval_pending(&reply) {
                     let c = self.challenge.clone().ok_or(CoreError::SessionClosed)?;
@@ -493,16 +502,8 @@ impl BankConnector for FinTsConnector {
                 self.after_approval(ctx, reply).await
             }
             ChallengeResponse::Code(tan) => {
-                let seg = SegmentBuilder::new("HKTAN", n, self.version("HKTAN"))
-                    .raw("2")
-                    .raw("")
-                    .raw("")
-                    .raw("")
-                    .de(&[&task])
-                    .raw("N")
-                    .build();
                 self.tan_for_next = None;
-                payload.push(seg);
+                payload.push(self.hktan_with_tan(n, &task));
                 let reply = self.send(ctx, payload, &sec, Some(tan.expose())).await?;
                 self.after_approval(ctx, reply).await
             }
@@ -519,6 +520,8 @@ impl BankConnector for FinTsConnector {
             .collect();
         let mut result = FetchResult::default();
         let mut ok_any = false;
+        // a TAN was demanded for more statements than banks serve without one (#1627)
+        let mut period_too_long = false;
         // not yet booked entries ("vorgemerkt"), see `camt::HOLD_PREFIX`
         let (mut holds_listed, mut holds_complete) = (false, true);
         // Explicit statements fetch (Vault::fetch_account_statements): HKEKA of one account only.
@@ -717,6 +720,7 @@ impl BankConnector for FinTsConnector {
                             holds_complete = false;
                             // MT940 would only send another TAN to the app (#1083)
                             done = tan_demanded(&e);
+                            period_too_long |= tan_beyond_free_period(ctx, &e);
                             errors.push(trf("{0}: Umsätze (HKCAZ/camt.052) – {1}", &[&label, &e]))
                         }
                     }
@@ -739,6 +743,7 @@ impl BankConnector for FinTsConnector {
                             }
                         }
                         Err(e) => {
+                            period_too_long |= tan_beyond_free_period(ctx, &e);
                             errors.push(trf("{0}: Umsätze (HKKAZ/MT940) – {1}", &[&label, &e]))
                         }
                     }
@@ -801,6 +806,7 @@ impl BankConnector for FinTsConnector {
                     AccountKind::Loan => "Darlehen".into(),
                     AccountKind::Savings => "Sparkonto".into(),
                     AccountKind::TimeDeposit => "Festgeld".into(),
+                    AccountKind::BuildingSavings => "Bausparvertrag".into(),
                     AccountKind::CreditCard => "Kreditkarte".into(),
                     AccountKind::Brokerage => "Depot".into(),
                     _ => "Girokonto".into(),
@@ -817,7 +823,13 @@ impl BankConnector for FinTsConnector {
                 balance_date,
             });
         }
+        // said once for the sync, not after every account
+        let hints: Vec<String> = period_too_long
+            .then(|| period_hint().into())
+            .into_iter()
+            .collect();
         if !ok_any && !errors.is_empty() {
+            errors.extend(hints);
             return Err(CoreError::Bank {
                 code: "FinTS".into(),
                 message: errors.join(" / "),
@@ -825,6 +837,7 @@ impl BankConnector for FinTsConnector {
         }
         // Something worked: the sync is done, and says what did not (#1083).
         result.warnings = errors;
+        result.hints = hints;
         // Claim the hold list as complete only when every camt request worked.
         if holds_listed && holds_complete {
             result.hold_prefix = Some(camt::HOLD_PREFIX.into());

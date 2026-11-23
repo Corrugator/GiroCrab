@@ -194,18 +194,33 @@ public final class CloudSyncManager {
         folderAccessDenied = false
     }
 
+    /// Returns once no `sync` is running. `sync` returns at once while another
+    /// one runs; a caller that reads its result (`lastMergeFoundSnapshot`,
+    /// `lastError`) waits here first (#1503). Main actor: the next `sync` call
+    /// right after this starts before any other can.
+    public func waitUntilIdle() async {
+        while isSyncing { do { try await Task.sleep(for: .milliseconds(100)) } catch { return } }
+    }
+
     /// Merges the other devices' snapshots into `vault`, then writes this
     /// device's own snapshot. Uses the open vault's key: no keychain prompt.
     /// - Parameters:
     ///   - remoteKey: key pasted from another device, for snapshots this
     ///     vault's key doesn't open.
     ///   - mergeOnly: merge but don't write (used while adopting a pasted key).
-    public func sync(vault: Vault, remoteKey: Data? = nil, mergeOnly: Bool = false) async {
+    ///   - onStart: runs once this sync holds `isSyncing`, before any work.
+    /// - Returns: false when it did not run (dev bypass, another sync running).
+    @discardableResult
+    public func sync(
+        vault: Vault, remoteKey: Data? = nil, mergeOnly: Bool = false,
+        onStart: (@MainActor () -> Void)? = nil
+    ) async -> Bool {
         // Dev bypass (`tresor-dev.girocrab`, throw-away key): never write into the user's iCloud folder.
-        guard !VaultKeyManager.keychainBypassed else { return }
-        guard !isSyncing else { return }
+        guard !VaultKeyManager.keychainBypassed else { return false }
+        guard !isSyncing else { return false }
         isSyncing = true; lastError = nil; keyMismatch = false; folderAccessDenied = false
         defer { isSyncing = false }
+        onStart?()
         do {
             let (dir, release) = try await syncDirectory()
             defer { release() }
@@ -231,6 +246,7 @@ public final class CloudSyncManager {
             lastError = error.localizedDescription
             folderAccessDenied = Self.isFolderAccessError(error)
         }
+        return true
     }
 
     /// Stores what a merge did: last sync time and summary, the peers'
@@ -281,6 +297,10 @@ public final class CloudSyncManager {
         autoState = AutoSyncState()
         _ = autoState.tick(changeCount: vault.changeCount(), now: Date())
     }
+
+    /// Tests only: awaited inside an automatic run once it holds `inFlight`,
+    /// before any work, so a test can keep that run going.
+    @ObservationIgnored var testingRunGate: (@MainActor () async -> Void)?
 
     func runForTesting(write: Bool, poll: Bool) async {
         guard let autoVault else { return }
@@ -383,6 +403,32 @@ public final class CloudSyncManager {
         }
     }
 
+    /// The sync after a restore (#1090): waits until no sync (manual or
+    /// automatic) runs, then starts its own. The last check and `sync` taking
+    /// `isSyncing` run on the main actor without a suspension point in between
+    /// (a same-actor call starts synchronously), so no other sync can take the
+    /// turn and make `sync` drop this one. `onStart` runs once it started.
+    /// - Parameter isCurrent: checked in that same turn; false (the vault was
+    ///   locked or swapped while waiting) drops the sync before it writes.
+    /// - Returns: false when it did not run (sync switched off or vault no
+    ///   longer current while waiting, dev bypass).
+    @discardableResult
+    public func syncWhenIdle(
+        vault: Vault, onStart: (@MainActor () -> Void)? = nil,
+        isCurrent: @MainActor () -> Bool = { true }
+    ) async -> Bool {
+        while true {
+            if let running = inFlight {
+                await running.value
+            } else if isSyncing || autoBusy {
+                try? await Task.sleep(for: .milliseconds(100))
+            } else {
+                guard isEnabled, isCurrent() else { return false }
+                return await sync(vault: vault, onStart: onStart)
+            }
+        }
+    }
+
     private func flush(_ vault: Vault) async {
         while let running = inFlight { await running.value }
         _ = autoState.tick(changeCount: vault.changeCount(), now: Date())
@@ -401,6 +447,7 @@ public final class CloudSyncManager {
         guard inFlight == nil else { return }
         // Cleared inside the task, before anyone awaiting it resumes.
         let task = Task {
+            if let gate = self.testingRunGate { await gate() }
             await self.perform(vault: vault, write: write, poll: poll)
             self.inFlight = nil
         }
