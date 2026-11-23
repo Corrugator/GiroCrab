@@ -186,6 +186,8 @@ struct SepaAccount {
     account_number: String,
     sub_account: String,
     blz: String,
+    /// The bank wants the account in KTI as IBAN:BIC:Konto:Unterkonto:280:BLZ (Postbank, #1702).
+    full_kti: bool,
 }
 
 #[derive(Debug, Clone)]
