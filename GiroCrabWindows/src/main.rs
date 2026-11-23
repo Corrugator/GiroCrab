@@ -524,6 +524,17 @@ fn render_bookings(win: &MainWindow) {
     });
     win.set_days(ModelRc::new(VecModel::from(days)));
     win.set_marked_count(with_state(|st| st.marked.len()) as i32);
+    // Sums of the ticked bookings from the cached rows (#878): no new `list_transactions`.
+    let summary = with_state(|st| {
+        daily::selection_summary(st.rows.iter().filter(|r| st.marked.contains(&r.id)))
+    });
+    let texts = daily::selection_texts(&summary, privacy, money);
+    win.set_selection_summary_visible(summary.count >= 2);
+    win.set_selection_count_text(texts.count.into());
+    win.set_selection_income(texts.income.into());
+    win.set_selection_expense(texts.expense.into());
+    win.set_selection_balance(texts.balance.into());
+    win.set_selection_extra(texts.extra.into());
     match inspector {
         Some((i, row, logo, recurring)) => {
             // The note box keeps unsaved typing while the same booking stays selected.
@@ -2297,6 +2308,11 @@ fn wire_batch_actions(win: &MainWindow, vault: Arc<Mutex<Option<Arc<Vault>>>>) {
         let weak = win.as_weak();
         win.on_batch_export(move || {
             let Some(win) = weak.upgrade() else { return };
+            // Privacy mode or a locked vault: nothing leaves the app.
+            if privacy_on(&win) {
+                win.set_sync_status("Export im Privatmodus nicht möglich".into());
+                return;
+            }
             let q = |s: &str| format!("\"{}\"", s.replace('"', "\"\""));
             let csv = with_state(|st| {
                 let mut out = String::from("Datum;Gegenpartei;Verwendungszweck;Kategorie;Betrag\n");
