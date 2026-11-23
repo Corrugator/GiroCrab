@@ -177,10 +177,24 @@ pub fn import_error_text(core: &str) -> String {
         || head.chars().count() > 120
         || head.contains(['"', '\'', ';', '{', '['])
         || !head.chars().any(char::is_alphabetic)
+        || head.split_whitespace().any(looks_like_isin)
     {
         return INVALID_EXPORT.into();
     }
     format!("Finpension-Import: {head}")
+}
+
+/// Fallback guard: a word shaped like an ISIN (2 letters, 9 letters/digits, 1 check digit) is file
+/// content and never shown, whatever message the core builds.
+fn looks_like_isin(word: &str) -> bool {
+    let w = word.trim_matches(|c: char| !c.is_ascii_alphanumeric());
+    let b = w.as_bytes();
+    b.len() == 12
+        && b[..2].iter().all(u8::is_ascii_uppercase)
+        && b[2..11]
+            .iter()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+        && b[11].is_ascii_digit()
 }
 
 /// Asks for the secret if needed, opens the session with it and drives it to the end.
@@ -714,5 +728,25 @@ mod tests {
         );
         assert_eq!(import_error_text("{\"iban\"} kaputt"), INVALID_EXPORT);
         assert_eq!(import_error_text(""), INVALID_EXPORT);
+    }
+
+    #[test]
+    fn import_errors_never_carry_an_isin() {
+        // The fixed core texts keep their reason.
+        assert_eq!(
+            import_error_text("Ungültige Eingabe: Finpension: missing name in a holding"),
+            "Finpension-Import: missing name in a holding"
+        );
+        assert_eq!(
+            import_error_text("Ungültige Eingabe: Finpension: negative figures in a holding"),
+            "Finpension-Import: negative figures in a holding"
+        );
+        // Fallback: even a message that quotes an ISIN is dropped.
+        for core in [
+            "Ungültige Eingabe: Finpension: missing name for DE0007164600",
+            "Ungültige Eingabe: Finpension: negative figures for US0378331005.",
+        ] {
+            assert_eq!(import_error_text(core), INVALID_EXPORT, "{core}");
+        }
     }
 }

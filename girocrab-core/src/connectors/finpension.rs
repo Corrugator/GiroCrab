@@ -567,11 +567,12 @@ fn build_holding(
     if !valid_isin(&isin) {
         return Err(invalid(format!("invalid ISIN '{isin}'")));
     }
+    // Fixed texts: the ISIN comes from the export file and must not reach error texts or logs.
     if name.is_empty() {
-        return Err(invalid(format!("missing name for {isin}")));
+        return Err(invalid("missing name in a holding".to_string()));
     }
     if quantity < 0.0 || price < 0.0 || value < 0.0 {
-        return Err(invalid(format!("negative figures for {isin}")));
+        return Err(invalid("negative figures in a holding".to_string()));
     }
     Ok(FinpensionHolding {
         isin,
