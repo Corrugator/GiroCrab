@@ -108,10 +108,16 @@ struct DirectDebitsView: View {
                         exportButton
                         Spacer(minLength: 0)
                     }
-                    HStack(spacing: 12) {
-                        addButton
-                        Spacer(minLength: 0)
-                        collectButton
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 12) {
+                            addButton
+                            Spacer(minLength: 0)
+                            collectButton
+                        }
+                        VStack(alignment: .leading, spacing: 10) {
+                            addButton
+                            collectButton
+                        }
                     }
                 }
             }

@@ -634,6 +634,11 @@ struct MainSplitView: View {
         .onChange(of: hSize) { _, new in
             if new == .regular { columns = .detailOnly }
         }
+        // Turning an iPad upright keeps a sidebar that was open as a column of its own,
+        // which leaves the booking column too little room next to the detail column.
+        .onChange(of: span.full < 1000) { _, narrow in
+            if narrow { columns = .detailOnly }
+        }
     }
 
     /// Room for the booking column (about a phone's width) next to the detail
