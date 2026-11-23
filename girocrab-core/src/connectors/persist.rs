@@ -1271,14 +1271,17 @@ impl Vault {
 
     /// Like [`begin_sync`](Self::begin_sync) for an automatic sync in the
     /// background: nothing in it may need a new approval, so the comdirect
-    /// PostBox fetch (#838) is left out.
+    /// PostBox fetch (#838) is left out, and the fetch asks for no TAN (#1730).
     pub fn begin_quiet_sync(
         self: Arc<Self>,
         connection_id: i64,
         secret: String,
         demo: bool,
     ) -> Result<Arc<SyncSession>, CoreError> {
-        self.begin_sync_inner(connection_id, secret, demo, None, PostboxMode::Off, None)
+        let session =
+            self.begin_sync_inner(connection_id, secret, demo, None, PostboxMode::Off, None)?;
+        session.set_quiet();
+        Ok(session)
     }
 
     /// Like [`begin_sync`](Self::begin_sync) for one account of its login
@@ -1755,6 +1758,9 @@ impl Vault {
             documents,
             skipped_accounts: skipped.into_iter().collect(),
             only_account,
+            // set by `SyncSession` when the fetch starts
+            prompt: None,
+            cancelled: Default::default(),
         };
         let mut connector = make_connector_for(kind, &key_str, demo);
         if !demo && is_comdirect_fints(&key_str) {

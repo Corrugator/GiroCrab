@@ -73,7 +73,7 @@ use self::dialog::{
     approval_pending, has_so_prefix, is_comdirect, period_hint, tan_beyond_free_period,
     tan_demanded,
 };
-use self::syntax::{Segment, SegmentBuilder};
+use self::syntax::Segment;
 use super::{
     BankConnector, BatchTransferJob, Challenge, ChallengeResponse, ConnectContext, DebitJob,
     FetchResult, PayeeMatch, Phase, RemoteAccount, StandingOrderJob, TransferJob, TransferResult,
@@ -493,15 +493,7 @@ impl BankConnector for FinTsConnector {
         match response {
             ChallengeResponse::ConfirmPayee => unreachable!(),
             ChallengeResponse::Poll => {
-                let seg = SegmentBuilder::new("HKTAN", n, self.version("HKTAN"))
-                    .raw("S")
-                    .raw("")
-                    .raw("")
-                    .raw("")
-                    .de(&[&task])
-                    .raw("N")
-                    .build();
-                payload.push(seg);
+                payload.push(self.hktan_status(n, &task));
                 let reply = self.send(ctx, payload, &sec, None).await?;
                 if approval_pending(&reply) {
                     let c = self.challenge.clone().ok_or(CoreError::SessionClosed)?;
@@ -510,16 +502,8 @@ impl BankConnector for FinTsConnector {
                 self.after_approval(ctx, reply).await
             }
             ChallengeResponse::Code(tan) => {
-                let seg = SegmentBuilder::new("HKTAN", n, self.version("HKTAN"))
-                    .raw("2")
-                    .raw("")
-                    .raw("")
-                    .raw("")
-                    .de(&[&task])
-                    .raw("N")
-                    .build();
                 self.tan_for_next = None;
-                payload.push(seg);
+                payload.push(self.hktan_with_tan(n, &task));
                 let reply = self.send(ctx, payload, &sec, Some(tan.expose())).await?;
                 self.after_approval(ctx, reply).await
             }
