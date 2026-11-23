@@ -475,6 +475,23 @@ fn tan_functions_are_learned_and_fallbacks_follow_the_preference_order() {
     );
 }
 
+/// Sparkasse's list for a chipTAN user (#1641): QR first, then the manual method, whose code
+/// can be typed, before the optical and USB ones.
+#[test]
+fn chiptan_functions_prefer_qr_then_manual() {
+    let mut c = FinTsConnector::new("52090000");
+    c.learn_bpd(&reply(
+        b"HIRMS:3:2:3+3920::Zugelassene Zwei-Schritt-Verfahren:913:912:911:910'",
+    ));
+    assert_eq!(c.st.sec_func, "913");
+    let codes: Vec<String> = c
+        .tan_function_fallbacks("913")
+        .into_iter()
+        .map(|(code, _)| code)
+        .collect();
+    assert_eq!(codes, ["910", "911", "912"]);
+}
+
 #[test]
 fn secure_url_check_rejects_plain_http() {
     assert!(crate::connectors::ensure_secure_fints_url("https://bank.example/fints").is_ok());

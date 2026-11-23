@@ -117,8 +117,10 @@ fn choose_tan_function(allowed: &[String], names: &HashMap<String, String>) -> S
     if let Some(a) = by_name {
         return a.clone();
     }
+    // chipTAN: QR (913) shows an image; manual (910) takes a typed code; optical (911) and
+    // USB/Bluetooth (912) need the generator itself and cannot be answered here (#1641)
     for pref in [
-        "946", "944", "942", "921", "962", "972", "982", "920", "923", "913", "912", "911", "910",
+        "946", "944", "942", "921", "962", "972", "982", "920", "923", "913", "910", "911", "912",
         "900",
     ] {
         if allowed.iter().any(|a| a == pref) {
