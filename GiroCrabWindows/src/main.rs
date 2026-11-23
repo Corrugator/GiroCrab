@@ -947,7 +947,9 @@ fn run_sync(vault: Arc<Vault>, demo: bool, ui: &DialogBridge) -> Result<String, 
             continue;
         }
         if sync_flow::auth_for(c.connector) == sync_flow::Auth::FileImport {
-            match import_export_file(&vault, c.id, &c.display_name) {
+            let result = import_export_file(&vault, c.id, &c.display_name);
+            log_file_import(&vault, c.id, &result);
+            match result {
                 Ok(Some(s)) => {
                     done += 1;
                     imported += s.transactions_imported;
@@ -1412,6 +1414,20 @@ fn import_export_file(
         .import_finpension_export(id, bytes)
         .map(Some)
         .map_err(|e| sync_flow::import_error_text(&e.to_string()))
+}
+
+/// Sync-history entry of a file import; a cancelled pick (`Ok(None)`) leaves none.
+fn log_file_import(
+    vault: &Vault,
+    id: i64,
+    result: &Result<Option<girocrab_core::connectors::SyncSummary>, String>,
+) {
+    let (outcome, message, imported) = match result {
+        Ok(Some(s)) => (SyncLogOutcome::Ok, String::new(), s.transactions_imported),
+        Ok(None) => return,
+        Err(e) => (SyncLogOutcome::Error, e.clone(), 0),
+    };
+    let _ = vault.log_sync(Some(id), SyncLogSource::Manual, outcome, message, imported);
 }
 
 /// Native file dialog for a bank export (Windows). Elsewhere (development builds) there is none.
@@ -2751,6 +2767,44 @@ mod tests {
         );
         assert!(transfer_prefill_from_args(args(&["girocrab://transfer?amount=5"])).is_some());
         assert!(transfer_prefill_from_args(args(&["--demo"])).is_none());
+    }
+
+    #[test]
+    fn file_import_is_logged_except_cancelled() {
+        use girocrab_core::connectors::SyncSummary;
+        use girocrab_core::sync_log::SyncLogFilter;
+        let path = std::env::temp_dir().join(format!(
+            "girocrab-win-fileimp-{}.sqlite",
+            std::process::id()
+        ));
+        let vault = Vault::open(path.display().to_string(), vec![5; 32]).unwrap();
+        let summary = SyncSummary {
+            accounts_updated: 1,
+            transactions_imported: 3,
+            transactions_categorized: 0,
+            transactions_skipped_archived: 0,
+            new_accounts: vec![],
+            revoked_accounts: vec![],
+            postbox_documents: None,
+            warnings: vec![],
+            hints: vec![],
+        };
+        log_file_import(&vault, 1, &Ok(None));
+        let none = SyncLogFilter::default();
+        assert!(vault.list_sync_log(none.clone()).unwrap().is_empty());
+        log_file_import(&vault, 1, &Ok(Some(summary)));
+        log_file_import(&vault, 1, &Err("kaputt".into()));
+        let log = vault.list_sync_log(none).unwrap();
+        assert_eq!(log.len(), 2);
+        assert!(
+            log.iter()
+                .any(|e| e.outcome == SyncLogOutcome::Ok && e.imported == 3)
+        );
+        assert!(
+            log.iter()
+                .any(|e| e.outcome == SyncLogOutcome::Error && e.message == "kaputt")
+        );
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
