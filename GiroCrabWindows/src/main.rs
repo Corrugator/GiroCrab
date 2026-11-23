@@ -946,6 +946,17 @@ fn run_sync(vault: Arc<Vault>, demo: bool, ui: &DialogBridge) -> Result<String, 
             }
             continue;
         }
+        if sync_flow::auth_for(c.connector) == sync_flow::Auth::FileImport {
+            match import_export_file(&vault, c.id, &c.display_name) {
+                Ok(Some(s)) => {
+                    done += 1;
+                    imported += s.transactions_imported;
+                }
+                Ok(None) => {}
+                Err(e) => problems.push(format!("{}: {e}", c.display_name)),
+            }
+            continue;
+        }
         let result = sync_flow::sync_connection(c.connector, &c.display_name, ui, |secret| {
             // `secret` moves into the core, which wipes it when the session ends.
             let session = vault
@@ -1108,9 +1119,13 @@ fn add_bank(
                 .map_err(e)?;
         }
     }
+    let file_import = r
+        .connector
+        .is_some_and(|k| sync_flow::auth_for(k) == sync_flow::Auth::FileImport);
     Ok(format!(
-        "{} hinzugefügt. Mit „Jetzt abrufen“ starten Sie den ersten Abruf.",
-        r.name
+        "{} hinzugefügt. {}",
+        r.name,
+        sync_flow::added_hint(file_import)
     ))
 }
 
@@ -1378,6 +1393,38 @@ fn pick_import_file() -> Option<PathBuf> {
 
 #[cfg(not(windows))]
 fn pick_import_file() -> Option<PathBuf> {
+    std::env::var_os("GIROCRAB_IMPORT_FILE").map(PathBuf::from)
+}
+
+/// File-import connection (Finpension, #975), called from the sync worker: the user picks the
+/// export, the core imports it into connection `id`. `Ok(None)` = dialog cancelled (skipped).
+fn import_export_file(
+    vault: &Arc<Vault>,
+    id: i64,
+    bank: &str,
+) -> Result<Option<girocrab_core::connectors::SyncSummary>, String> {
+    let Some(path) = pick_export_file(bank) else {
+        return Ok(None);
+    };
+    let bytes = sync_flow::read_export(&path)?;
+    vault
+        .clone()
+        .import_finpension_export(id, bytes)
+        .map(Some)
+        .map_err(|e| sync_flow::import_error_text(&e.to_string()))
+}
+
+/// Native file dialog for a bank export (Windows). Elsewhere (development builds) there is none.
+#[cfg(windows)]
+fn pick_export_file(bank: &str) -> Option<PathBuf> {
+    rfd::FileDialog::new()
+        .set_title(format!("Datei importieren – {bank}"))
+        .add_filter("Export (CSV, JSON)", &["csv", "json"])
+        .pick_file()
+}
+
+#[cfg(not(windows))]
+fn pick_export_file(_bank: &str) -> Option<PathBuf> {
     std::env::var_os("GIROCRAB_IMPORT_FILE").map(PathBuf::from)
 }
 

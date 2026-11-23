@@ -21,6 +21,8 @@ pub enum Auth {
     Secret,
     /// No secret up front (PSD2 aggregation): the bank page in the browser authorises.
     Browser,
+    /// No online access: the user picks an export file that the core imports (Finpension, #975).
+    FileImport,
     /// Needs an API key or similar that the Windows app cannot collect yet.
     Unsupported,
 }
@@ -35,6 +37,7 @@ pub fn auth_for(kind: ConnectorKind) -> Auth {
         ConnectorKind::AmericanExpress
         | ConnectorKind::AmazonVisa
         | ConnectorKind::EnableBanking => Auth::Browser,
+        ConnectorKind::Finpension => Auth::FileImport,
         _ => Auth::Unsupported,
     }
 }
@@ -59,6 +62,38 @@ pub trait Stepper {
 
 pub const CANCELLED: &str = "Abruf abgebrochen.";
 
+/// Shown instead of a core message that might quote the file.
+pub const INVALID_EXPORT: &str = "Die Datei ist kein gültiger Finpension-Export (CSV oder JSON).";
+
+/// Second sentence after "<Bank> hinzugefügt.": file-import banks are fed with an export file.
+pub fn added_hint(file_import: bool) -> &'static str {
+    if file_import {
+        "Mit „Jetzt abrufen“ wählen Sie die Exportdatei (CSV oder JSON) und importieren sie."
+    } else {
+        "Mit „Jetzt abrufen“ starten Sie den ersten Abruf."
+    }
+}
+
+/// Reads an export file. The message never names the path or quotes the content.
+pub fn read_export(path: &std::path::Path) -> Result<Vec<u8>, String> {
+    let bytes =
+        std::fs::read(path).map_err(|e| format!("Die Datei konnte nicht gelesen werden: {e}"))?;
+    if bytes.is_empty() {
+        return Err("Die Datei ist leer.".into());
+    }
+    Ok(bytes)
+}
+
+/// Core import error → user text. Keeps only the head before the first `:` / line break and
+/// drops it entirely if it looks like file content (quotes, separators, JSON) or is overlong.
+pub fn import_error_text(core: &str) -> String {
+    let head = core.split([':', '\n']).next().unwrap_or_default().trim();
+    if head.is_empty() || head.chars().count() > 120 || head.contains(['"', '\'', ';', '{', '[']) {
+        return INVALID_EXPORT.into();
+    }
+    format!("Finpension-Import: {head}")
+}
+
 /// Asks for the secret if needed, opens the session with it and drives it to the end.
 pub fn sync_connection<S: Stepper, U: Ui>(
     kind: ConnectorKind,
@@ -73,6 +108,11 @@ pub fn sync_connection<S: Stepper, U: Ui>(
             None => return Err(CANCELLED.into()),
         },
         Auth::Browser => Zeroizing::new(String::new()),
+        Auth::FileImport => {
+            return Err(format!(
+                "{bank}: Dieser Zugang wird per Exportdatei importiert."
+            ));
+        }
         Auth::Unsupported => {
             return Err(format!(
                 "{bank}: Dieser Zugang wird von der Windows-App noch nicht unterstützt."
@@ -435,6 +475,53 @@ mod tests {
     fn connector_auth_modes() {
         assert_eq!(auth_for(ConnectorKind::FinTsGeneric), Auth::Secret);
         assert_eq!(auth_for(ConnectorKind::EnableBanking), Auth::Browser);
+        assert_eq!(auth_for(ConnectorKind::Finpension), Auth::FileImport);
         assert_eq!(auth_for(ConnectorKind::PayPal), Auth::Unsupported);
+    }
+
+    #[test]
+    fn added_hint_points_file_import_to_the_export() {
+        assert!(added_hint(true).contains("Exportdatei"));
+        assert!(added_hint(false).contains("ersten Abruf"));
+    }
+
+    #[test]
+    fn missing_export_file_is_a_read_error_without_path() {
+        let path =
+            std::env::temp_dir().join(format!("girocrab-975-missing-{}.csv", std::process::id()));
+        let err = read_export(&path).unwrap_err();
+        assert!(
+            err.starts_with("Die Datei konnte nicht gelesen werden"),
+            "{err}"
+        );
+        assert!(!err.contains("girocrab-975"), "{err}");
+    }
+
+    #[test]
+    fn empty_export_file_is_rejected() {
+        let path =
+            std::env::temp_dir().join(format!("girocrab-975-empty-{}.json", std::process::id()));
+        std::fs::write(&path, b"").unwrap();
+        let result = read_export(&path);
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(result.unwrap_err(), "Die Datei ist leer.");
+    }
+
+    #[test]
+    fn core_errors_never_carry_file_content() {
+        assert_eq!(
+            import_error_text("Keine Finpension-Verbindung."),
+            "Finpension-Import: Keine Finpension-Verbindung."
+        );
+        assert_eq!(
+            import_error_text("Ungültiger Export: Zeile 2 \"4711;Kauf\""),
+            "Finpension-Import: Ungültiger Export"
+        );
+        assert_eq!(
+            import_error_text("2026-01-02;Kauf;\"Fonds\""),
+            INVALID_EXPORT
+        );
+        assert_eq!(import_error_text("{\"iban\"} kaputt"), INVALID_EXPORT);
+        assert_eq!(import_error_text(""), INVALID_EXPORT);
     }
 }
