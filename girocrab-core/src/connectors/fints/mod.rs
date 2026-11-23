@@ -117,6 +117,11 @@ struct FinTsState {
     /// HIKKUS: days of card history the bank keeps (0 = unknown).
     #[serde(default)]
     kku_storage_days: i64,
+    /// HIKAZS (MT940) / HICAZS (camt): days of bookings the bank keeps (0 = unknown).
+    #[serde(default)]
+    kaz_storage_days: i64,
+    #[serde(default)]
+    caz_storage_days: i64,
     /// pain.001 descriptors per transfer transaction (HKCCS/HKIPZ/HKCSE) from the BPD
     /// parameter segments HICCSS / HIIPZS / HICSES.
     #[serde(default)]

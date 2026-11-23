@@ -1229,7 +1229,9 @@ const POSTBOX_DAYS: i64 = 7;
 /// Whether a sync may add the PostBox fetch (#838).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum PostboxMode {
-    /// Never: an automatic sync must not ask for an approval.
+    /// Never: an automatic sync must not ask for an approval. Also a sync of
+    /// one account or of statements only; none of these starts an account
+    /// without bookings further back than 90 days (#1043).
     Off,
     /// When it is on for the login and due.
     Due,
@@ -1584,7 +1586,7 @@ impl Vault {
             secret
         };
         let secret = SecretString::new(secret);
-        let (kind, key_str, login, state, ctx_settings, since, skipped, demo) = {
+        let (kind, key_str, login, state, ctx_settings, since, history, skipped, demo) = {
             let db = self.db()?;
             let (kind, login, state): (String, String, SecretJson) = db
                 .query_row(
@@ -1719,11 +1721,23 @@ impl Vault {
                     "Dieses Konto ist archiviert oder vom Abruf ausgenommen.",
                 )));
             }
-            let days: i64 = Vault::setting_inner(&db, "sync.days_back")?
-                .and_then(|d| d.parse().ok())
-                .unwrap_or(90);
-            let since = since_window(crate::dates::today(), days, &newest);
-            (kind, key_str, login, state, settings, since, skipped, demo)
+            // Only a full sync the user started starts accounts without bookings further
+            // back than 90 days, or runs a pending full fetch (#1043): `PostboxMode::Off` is
+            // an automatic one, one account or statements only.
+            let user_full_sync = postbox != PostboxMode::Off;
+            let days = super::history::first_fetch_days(&db, kind, user_full_sync)?;
+            let history = if user_full_sync {
+                super::history::pending(&db, connection_id)?
+            } else {
+                None
+            };
+            let full_days = history
+                .as_deref()
+                .map(|v| super::history::HistoryRange::parse(v).days(kind));
+            let since = since_window(crate::dates::today(), days, &newest, full_days);
+            (
+                kind, key_str, login, state, settings, since, history, skipped, demo,
+            )
         };
         let (since, since_by_account) = since;
         let documents = match only_account {
@@ -1766,6 +1780,7 @@ impl Vault {
             kind,
             connector,
             ctx,
+            history,
         )))
     }
 

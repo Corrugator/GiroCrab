@@ -337,11 +337,13 @@ impl Documents {
 /// because its siblings moved on. The lower bound is `days` back, or earlier
 /// when the whole connection has not been synced for longer. Accounts without
 /// bookings (new ones, depots) get that lower bound but do not pull the
-/// connection-wide `since` back.
+/// connection-wide `since` back. A full fetch (`full_days`, #1043) starts
+/// every account at least that far back, also one with bookings.
 pub(crate) fn since_window(
     today: jiff::civil::Date,
     days: i64,
     newest: &[(String, Option<String>)],
+    full_days: Option<i64>,
 ) -> (String, HashMap<String, String>) {
     let parse = |d: &Option<String>| {
         d.as_deref()
@@ -349,7 +351,9 @@ pub(crate) fn since_window(
     };
     let back10 = |d: jiff::civil::Date| d - crate::dates::days(10);
     let fmt = |d: jiff::civil::Date| crate::dates::iso(d);
+    let full = full_days.map(|f| today - crate::dates::days(f));
     let default_start = today - crate::dates::days(days);
+    let default_start = full.map_or(default_start, |f| default_start.min(f));
     let floor = match newest.iter().filter_map(|(_, d)| parse(d)).max() {
         Some(g) => default_start.min(back10(g)),
         None => default_start,
@@ -360,6 +364,7 @@ pub(crate) fn since_window(
         let start = match parse(d) {
             Some(d) => {
                 let s = back10(d).max(floor);
+                let s = full.map_or(s, |f| s.min(f));
                 earliest = Some(earliest.map_or(s, |e| e.min(s)));
                 s
             }

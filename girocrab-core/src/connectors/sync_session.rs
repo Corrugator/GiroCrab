@@ -25,6 +25,9 @@ pub struct SyncSession {
     /// `None` once the sync finished, failed or was cancelled, so every
     /// later step gets `SessionClosed`.
     state: AsyncMutex<Option<Active>>,
+    /// The pending full fetch (#1043) this sync reaches back for: done once
+    /// its result is stored.
+    history: Option<String>,
 }
 
 impl SyncSession {
@@ -33,11 +36,13 @@ impl SyncSession {
         kind: ConnectorKind,
         connector: Box<dyn BankConnector>,
         ctx: ConnectContext,
+        history: Option<String>,
     ) -> Self {
         Self {
             vault,
             kind,
             state: AsyncMutex::new(Some(Active { connector, ctx })),
+            history,
         }
     }
 
@@ -95,6 +100,10 @@ impl SyncSession {
                     data.keep_only(only);
                 }
                 let summary = store_fetch(&self.vault, self.kind, st.ctx.connection_id, data)?;
+                if let Some(history) = &self.history {
+                    let db = self.vault.db()?;
+                    super::history::finish(&db, st.ctx.connection_id, history)?;
+                }
                 Ok(SyncStep::Finished { summary })
             }
         }
