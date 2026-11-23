@@ -403,6 +403,7 @@ final class CloudSyncTests: XCTestCase {
         let other = Task {
             await sync.sync(vault: v) {
                 started.names.append("other")
+                sync.isEnabled = true
                 releasePoll?.resume()
                 releasePoll = nil
             }
