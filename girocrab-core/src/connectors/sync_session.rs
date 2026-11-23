@@ -356,9 +356,11 @@ impl SyncSession {
         self.answer(PromptAnswer::Skip).await
     }
 
-    /// Cancels the sync and closes the bank dialog. During the fetch nothing
-    /// more is sent to the bank and nothing is stored, also when a step is
-    /// still running (a TAN on its way): the flag is set before waiting for it.
+    /// Cancels the sync and closes the bank dialog. The flag is set before
+    /// waiting for a running step (a TAN on its way), so the fetch sends no
+    /// further order and stores nothing. An action that already passed its
+    /// last check of the flag still runs to its end: the one order about to
+    /// be sent, or the storing of a finished fetch (ADR 0002).
     pub async fn cancel(&self) {
         self.cancelled.set();
         match self.state.lock().await.take() {
