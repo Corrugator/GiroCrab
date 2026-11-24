@@ -812,7 +812,22 @@ impl DialogBridge {
             w.set_tan_mode(mode.into());
             w.set_tan_title(title.into());
             w.set_tan_message(message.into());
+            clear_tan_comparison(&w);
             w.set_tan_open(true);
+        });
+    }
+
+    /// Order comparison (#949); queued after `show`, so it lands on the same dialog.
+    fn show_comparison(&self, cmp: tan_comparison_ui::TanComparison) {
+        let _ = self.win.upgrade_in_event_loop(move |w| {
+            // a queued event may land after the vault was locked: no amounts then
+            if !w.get_unlocked() {
+                return;
+            }
+            w.set_tan_cmp_amount(cmp.amount.into());
+            w.set_tan_cmp_prefix(cmp.prefix.into());
+            w.set_tan_cmp_end(cmp.end_chars.into());
+            w.set_tan_cmp_visible(true);
         });
     }
 
@@ -821,6 +836,7 @@ impl DialogBridge {
             w.set_tan_open(false);
             w.set_tan_image(Default::default());
             w.set_tan_has_image(false);
+            clear_tan_comparison(&w);
         });
     }
 
@@ -868,6 +884,10 @@ impl DialogBridge {
             c.title.clone()
         };
         self.show(mode, title, challenge_text(c), c.image.clone());
+        // #949: only the order's own TAN gets the comparison, never login SCA or an account sync
+        if let Some(cmp) = tan_comparison_ui::current() {
+            self.show_comparison(cmp);
+        }
         self.replies
             .lock()
             .unwrap()
@@ -876,6 +896,13 @@ impl DialogBridge {
             .flatten()
             .map(Zeroizing::new)
     }
+}
+
+fn clear_tan_comparison(w: &MainWindow) {
+    w.set_tan_cmp_visible(false);
+    w.set_tan_cmp_amount(Default::default());
+    w.set_tan_cmp_prefix(Default::default());
+    w.set_tan_cmp_end(Default::default());
 }
 
 fn challenge_text(c: &Challenge) -> String {
@@ -930,6 +957,10 @@ impl sync_flow::Ui for DialogBridge {
             c.title.clone()
         };
         self.show("push", title, challenge_text(c), None);
+        // #949: the order's push approval shows the comparison as well; login push stays without
+        if let Some(cmp) = tan_comparison_ui::current() {
+            self.show_comparison(cmp);
+        }
         match self.replies.lock().unwrap().recv_timeout(interval) {
             Ok(None) | Err(RecvTimeoutError::Disconnected) => false,
             Ok(Some(_)) | Err(RecvTimeoutError::Timeout) => true,
@@ -1601,6 +1632,8 @@ fn copy_image_to_clipboard(_png: &[u8], _dib: &[u8]) -> Result<(), String> {
     Err("Bilder in die Zwischenablage kopieren geht nur unter Windows.".into())
 }
 
+mod tan_comparison_ui;
+
 /// `TransferSession` driven synchronously.
 struct CoreTransfer {
     session: Arc<girocrab_core::TransferSession>,
@@ -1650,6 +1683,7 @@ fn run_transfer(
     vault: Arc<Vault>,
     demo: bool,
     request: girocrab_core::SepaTransferRequest,
+    comparison: Option<tan_comparison_ui::TanComparison>,
     bank: &str,
     ui: &DialogBridge,
 ) -> Result<String, String> {
@@ -1671,6 +1705,9 @@ fn run_transfer(
     let session = vault
         .begin_transfer(request, std::mem::take(&mut *secret), demo)
         .map_err(|e| e.to_string())?;
+    // #949: disarmed by the guard on every way out of this function
+    let gate = session.clone();
+    let _armed = tan_comparison_ui::arm(comparison, move || gate.awaits_order_approval());
     transfer_flow::drive_transfer(
         &CoreTransfer {
             session,
@@ -2200,6 +2237,9 @@ fn main() -> Result<(), slint::PlatformError> {
             with_state(|st| *st = State::default());
             win.set_unlocked(false);
             win.set_days(ModelRc::new(VecModel::from(Vec::<DayGroup>::new())));
+            // #949: the armed order comparison (amount, IBAN) must not outlive the vault either
+            tan_comparison_ui::disarm_all();
+            clear_tan_comparison(&win);
             // Selection summary: no amounts may outlive the vault.
             win.set_marked_count(0);
             win.set_selection_summary_visible(false);
@@ -2495,6 +2535,11 @@ fn main() -> Result<(), slint::PlatformError> {
                     return;
                 }
             };
+            // Frozen now (#949): later form edits never change what the TAN dialog asks to compare.
+            let comparison = tan_comparison_ui::TanComparison::new(
+                &request.recipient_iban,
+                request.amount_cents,
+            );
             let bank = source.map(|s| s.2).unwrap_or_default();
             let demo = *demo_active.lock().unwrap();
             win.set_transfer_open(false);
@@ -2502,7 +2547,7 @@ fn main() -> Result<(), slint::PlatformError> {
             win.set_sync_status("Überweisung läuft …".into());
             let (weak, bridge) = (win.as_weak(), bridge.clone());
             std::thread::spawn(move || {
-                let result = run_transfer(v.clone(), demo, request, &bank, &bridge);
+                let result = run_transfer(v.clone(), demo, request, comparison, &bank, &bridge);
                 bridge.hide();
                 let _ = weak.upgrade_in_event_loop(move |win| {
                     let sel = Some(win.get_selected() as i64).filter(|s| *s >= 0);
