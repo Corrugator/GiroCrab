@@ -472,7 +472,13 @@ public final class CloudSyncManager {
         if let merge = outcome.merge {
             autoState.merged(changes: merge.stats.reduce(UInt64(0)) { $0 + $1.changes })
             lastError = nil
-            record(merge)
+            let previousStats = lastStats
+        record(merge)
+        if merge.stats.isEmpty, !outcome.written.wrote,
+           previousStats == Self.skippedWriteNote(mergeOnly: false, wrote: false, merged: false) {
+            lastStats = previousStats
+            defaults.set(previousStats, forKey: K.stats)
+        }
             let changed = merge.stats.contains {
                 $0.accountsAdded + $0.categoriesAdded + $0.rulesAdded + $0.bookingsAdded + $0.bookingsUpdated + $0.groupsUpdated > 0
             }
