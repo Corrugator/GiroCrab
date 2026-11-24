@@ -25,7 +25,7 @@ Dieses Dokument beschreibt den Stand des Branches `main`; ein externes Audit gab
 | Netzwerk | Verbindungen zu Banken nutzen **TLS mit Zertifikatsprüfung**, ohne Option zum Abschalten. Ausnahme: ein eigener Bitcoin-Core-Knoten, per `http` nur auf dem eigenen Rechner. Weiterleitungen siehe „Netzwerk“. |
 | Oberfläche | `.sensitive()` verdeckt Personenbezogenes, Beträge und Bezeichnungen (Datenschutzmodus, Fehlerbericht-Screenshots). Texte für öffentliche Fehlerberichte laufen durch `sanitize_report_text`. |
 | Lokale Schnittstelle | Nur macOS, standardmäßig aus, nur lesend. Siehe „Lokale Schnittstelle“. |
-| Updates | macOS-Direktdownload: signierter Feed, signiertes Disk-Image und Developer-ID-Prüfung, siehe [`docs/auto-updates.md`](docs/auto-updates.md) und [`docs/release-integrity.md`](docs/release-integrity.md). |
+| Updates | macOS-Direktdownload: signierter Feed, signiertes Disk-Image und Developer-ID-Prüfung, siehe [`docs/auto-updates.md`](docs/auto-updates.md) und [`docs/release-integrity.md`](docs/release-integrity.md). Windows: nur ein Hinweis, der Download öffnet sich im Browser und ist nicht signiert ([`docs/windows.md`](docs/windows.md)). |
 
 ### Schlüssel
 
@@ -67,6 +67,7 @@ Neben den Endpunkten, die du selbst einrichtest, kann GiroCrab diese Adressen ab
 | `raw.githubusercontent.com` | signierte Sicherheitssperre | macOS/iOS/Linux: beim Start und vor Bankkontakten, höchstens alle 15 Minuten |
 | `raw.githubusercontent.com` | signierte Mitteilungen | macOS/iOS/Linux: höchstens alle 6 Stunden; abschaltbar (Standard: an) |
 | `github.com` | Update-Feed und Updates | nur macOS-Direktdownload |
+| `api.github.com` | Liste der Releases | nur Windows: auf Knopfdruck oder, falls eingeschaltet, höchstens einmal am Tag (Standard: aus) |
 | `api.frankfurter.dev` | Goldpreis | nur mit automatisch bewerteten Sachwerten; übertragen werden Metall und Zeitraum |
 | `api.kraken.com` | Bitcoin-Kurs | nur mit Bitcoin-Core-Konto |
 | `icons.duckduckgo.com` oder `www.google.com` | Händler-Logos | nur nach Auswahl (Standard: aus); übertragen wird die Händler-Domain |
@@ -150,7 +151,7 @@ the `main` branch; there has been no external audit so far.
 | Network | Bank connections use **TLS with certificate validation**, with no opt-out. Exception: your own Bitcoin Core node, over `http` on the same computer only. For redirects see “Network”. |
 | UI | `.sensitive()` covers personal data, amounts and labels (privacy mode, bug-report screenshots). Text for public bug reports passes through `sanitize_report_text`. |
 | Local interface | macOS only, off by default, read-only. See “Local interface”. |
-| Updates | macOS direct download: signed feed, signed disk image and Developer ID check, see [`docs/auto-updates.md`](docs/auto-updates.md) and [`docs/release-integrity.md`](docs/release-integrity.md) (German). |
+| Updates | macOS direct download: signed feed, signed disk image and Developer ID check, see [`docs/auto-updates.md`](docs/auto-updates.md) and [`docs/release-integrity.md`](docs/release-integrity.md) (German). Windows: a notice only; the download opens in the browser and is not signed ([`docs/windows.md`](docs/windows.md), German). |
 
 ### Keys
 
@@ -192,6 +193,7 @@ Besides the endpoints you set up yourself, GiroCrab can contact:
 | `raw.githubusercontent.com` | signed security lock | macOS/iOS/Linux: at start and before contacting a bank, at most every 15 minutes |
 | `raw.githubusercontent.com` | signed announcements | macOS/iOS/Linux: at most every 6 hours; can be turned off (default: on) |
 | `github.com` | update feed and updates | macOS direct download only |
+| `api.github.com` | list of releases | Windows only: on request or, if switched on, at most once a day (default: off) |
 | `api.frankfurter.dev` | gold price | only with automatically valued tangible assets; sends the metal and date range |
 | `api.kraken.com` | Bitcoin price | only with a Bitcoin Core account |
 | `icons.duckduckgo.com` or `www.google.com` | merchant logos | only if chosen (default: off); sends the merchant domain |
