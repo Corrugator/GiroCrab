@@ -290,6 +290,14 @@ public final class CloudSyncManager {
         return String(localized: "Noch nichts in iCloud gespeichert: Der Tresor wird erst synchronisiert, sobald er ein Konto enthält.")
     }
 
+    /// Status after an automatic run whose poll went through `record`: a run
+    /// that neither wrote nor merged anything (key mismatch, unreadable peer)
+    /// keeps the previous text, e.g. the note from `skippedWriteNote`, instead
+    /// of claiming „aktualisiert“ (#1703).
+    nonisolated static func pollStats(previous: String?, recorded: String?, merged: Bool, wrote: Bool) -> String? {
+        merged || wrote ? recorded : previous
+    }
+
     /// This installation's id in the sync folder's file names.
     private var deviceID: String {
         if let cachedDeviceID { return cachedDeviceID }
@@ -512,12 +520,15 @@ public final class CloudSyncManager {
             autoState.merged(changes: merge.stats.reduce(UInt64(0)) { $0 + $1.changes })
             lastError = nil
             let previousStats = lastStats
-        record(merge)
-        if merge.stats.isEmpty, !outcome.written.wrote,
-           previousStats == Self.skippedWriteNote(mergeOnly: false, wrote: false, merged: false) {
-            lastStats = previousStats
-            defaults.set(previousStats, forKey: K.stats)
-        }
+            record(merge)
+            let kept = Self.pollStats(
+                previous: previousStats, recorded: lastStats,
+                merged: !merge.stats.isEmpty, wrote: outcome.written.wrote
+            )
+            if kept != lastStats {
+                lastStats = kept
+                defaults.set(kept, forKey: K.stats)
+            }
             let changed = merge.stats.contains {
                 $0.accountsAdded + $0.categoriesAdded + $0.rulesAdded + $0.bookingsAdded + $0.bookingsUpdated + $0.groupsUpdated > 0
             }
