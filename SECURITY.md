@@ -18,7 +18,7 @@ Dieses Dokument beschreibt den Stand des Branches `main`; ein externes Audit gab
 
 | Bereich | Maßnahme |
 |---|---|
-| Daten in Ruhe | Der Tresor ist eine **SQLCipher-4**-Datenbank (AES-256). Speicherschutz (`cipher_memory_security`) wird beim Öffnen eingeschaltet (nicht in Unit-Tests). |
+| Daten in Ruhe | Der Tresor ist eine **SQLCipher-4**-Datenbank (AES-256). Speicherschutz (`cipher_memory_security`) fordert der Kern beim Öffnen an (nicht in Unit-Tests), prüft das Ergebnis aber nicht: Der Tresor öffnet auch ohne ihn. |
 | Tresorschlüssel | Zufällige 32 Byte im **Schlüsselbund** (macOS/iOS), **Secret Service** (Linux) oder **Windows Credential Manager**. Einzelheiten unter „Schlüssel“. |
 | Zugangsdaten | Gespeicherte PINs, Portal-Passwörter, API-Schlüssel und Sitzungen liegen **im verschlüsselten Tresor**, nicht einzeln im Schlüsselbund (Ausnahmen unter „Schlüssel“). Eine PIN zu speichern ist freiwillig. |
 | Geheimnisse im Speicher | Der Rust-Kern hält Schlüssel und Geheimnisse an den vorgesehenen Stellen in `Zeroizing`-Containern, die beim Freigeben überschrieben werden. Für Zeichenketten der Oberflächen und der WebViews gilt das nicht. |
@@ -112,7 +112,7 @@ die freigegebenen Daten an Dritte weitergeben.
 - Versehentliches Offenlegen in Screenshots, Logs und Fehlerberichten (`.sensitive()`, Sanitizer).
 
 **Nur gemindert**
-- Reste von Geheimnissen im Arbeitsspeicher, in Swap oder Core-Dumps (Zeroizing im Kern, SQLCipher-Speicherschutz).
+- Reste von Geheimnissen im Arbeitsspeicher, in Swap oder Core-Dumps (Zeroizing im Kern, SQLCipher-Speicherschutz, soweit aktiv).
 - Passwort-Raten gegen eine entwendete Sicherung (PBKDF2, Mindestlänge).
 
 **Nicht geschützt gegen (außerhalb des Modells)**
@@ -143,7 +143,7 @@ the `main` branch; there has been no external audit so far.
 
 | Area | Measure |
 |---|---|
-| Data at rest | The vault is a **SQLCipher 4** database (AES-256). Memory security (`cipher_memory_security`) is switched on when it is opened (not in unit tests). |
+| Data at rest | The vault is a **SQLCipher 4** database (AES-256). The core requests memory security (`cipher_memory_security`) on opening (not in unit tests) but does not check the result: the vault also opens without it. |
 | Vault key | 32 random bytes in the **Keychain** (macOS/iOS), **Secret Service** (Linux) or **Windows Credential Manager**. Details under “Keys”. |
 | Credentials | Stored PINs, portal passwords, API keys and sessions are kept **in the encrypted vault**, not one by one in the keychain (exceptions under “Keys”). Storing a PIN is optional. |
 | Secrets in memory | The Rust core holds keys and secrets in `Zeroizing` containers where intended, overwritten on drop. This does not apply to strings of the UIs and web views. |
@@ -237,7 +237,7 @@ shared data on to third parties.
 - Accidental disclosure in screenshots, logs and bug reports (`.sensitive()`, sanitizer).
 
 **Only mitigated**
-- Leftover secrets in memory, swap or core dumps (Zeroizing in the core, SQLCipher memory security).
+- Leftover secrets in memory, swap or core dumps (Zeroizing in the core, SQLCipher memory security where active).
 - Password guessing against a stolen backup (PBKDF2, minimum length).
 
 **Out of scope**
