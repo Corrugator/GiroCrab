@@ -512,7 +512,7 @@ fn csv_field(s: &str) -> String {
 
 /// Free text (names, kinds): additionally guarded against spreadsheet formulas.
 fn csv_text(s: &str) -> String {
-    if s.starts_with(['=', '+', '-', '@']) {
+    if s.starts_with(['=', '+', '-', '@', '\t', '\r']) {
         csv_field(&format!("'{s}"))
     } else {
         csv_field(s)
@@ -593,7 +593,11 @@ pub fn depot_csv(
                     csv_text(&c[2]),
                     csv_field(&c[3]),
                     csv_field(&c[4]),
-                    csv_field(&cur),
+                    csv_field(if t.currency.is_empty() {
+                        &cur
+                    } else {
+                        &t.currency
+                    }),
                 ]
             });
             csv_document(&header, rows)
