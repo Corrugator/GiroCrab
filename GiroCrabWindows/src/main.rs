@@ -2,6 +2,7 @@
 //! Unlock / create vault, demo mode (`GIROCRAB_DEMO_SEED=1`), accounts with balances,
 //! bookings of the selected account and bank sync (FinTS PIN/TAN dialog, PSD2 browser redirect).
 
+mod amount_filter;
 mod analytics;
 mod announcements;
 mod assets_loans;
@@ -258,16 +259,21 @@ fn account_rows(vault: &Vault, privacy: bool) -> Result<(Vec<AccountRow>, String
 const ROW_LIMIT: u32 = 2000;
 
 /// Bookings of a listing target (one account, all, unchecked, uncategorized or one category),
+/// narrowed by the amount filter in the core (#357), so the row limit applies to the filtered set,
 /// plus the running and day balances when the target is one account (#577).
-fn load_rows(vault: &Vault, target: Target) -> Result<(Vec<Row>, daily::Balances), String> {
+fn load_rows(
+    vault: &Vault,
+    target: Target,
+    amount: amount_filter::AmountFilter,
+) -> Result<(Vec<Row>, daily::Balances), String> {
     let single = matches!(target, Target::Account(_));
-    let page = vault
-        .list_transactions(BookingFilter {
-            limit: ROW_LIMIT,
-            with_balances: single,
-            ..nav::booking_filter(target)
-        })
-        .map_err(|e| e.to_string())?;
+    let mut filter = BookingFilter {
+        limit: ROW_LIMIT,
+        with_balances: single,
+        ..nav::booking_filter(target)
+    };
+    amount.apply(&mut filter);
+    let page = vault.list_transactions(filter).map_err(|e| e.to_string())?;
     let rows: Vec<Row> = page.transactions.iter().map(Row::from).collect();
     let running = page
         .running_balances
@@ -301,6 +307,8 @@ struct State {
     transfer_rules: Vec<transfer_flow::RecipientRule>,
     /// What the sidebar selected; decides which bookings `reload` loads.
     target: Target,
+    /// Amount range / direction (#357); applied by the core in `load_rows`, not in memory.
+    amount: amount_filter::AmountFilter,
     /// Decoded merchant logos by candidate key (`logos::key`); lives for the session.
     logos: std::collections::HashMap<String, slint::Image>,
     /// Keys already requested this session (hit or miss), so a miss is not retried on every redraw.
@@ -476,8 +484,11 @@ fn render_analytics(win: &MainWindow, privacy: bool) {
 
 fn render_bookings(win: &MainWindow) {
     let privacy = privacy_on(win);
-    let (count, tags) = with_state(|st| (st.shown.len(), tag_names(&st.rows)));
+    let (count, tags, amount) = with_state(|st| (st.shown.len(), tag_names(&st.rows), st.amount));
     win.set_booking_count(format!("{count} Buchungen").into());
+    win.set_amount_filter_title(amount.title(privacy).into());
+    win.set_amount_filter_active(amount.is_active());
+    win.set_amount_filter_masked(privacy);
     let mut labels = vec![SharedString::from("Alle Tags")];
     labels.extend(tags.into_iter().map(SharedString::from));
     if win.get_tag_index() as usize >= labels.len() {
@@ -749,22 +760,57 @@ fn apply_filter(win: &MainWindow) {
     render_bookings(win);
 }
 
-/// Loads the bookings of the current account scope on a worker thread, then redraws.
+thread_local! {
+    /// Amount filter of the newest load still running (UI thread only); see `PendingAmount`.
+    static PENDING_AMOUNT: std::cell::Cell<amount_filter::PendingAmount> =
+        const { std::cell::Cell::new(amount_filter::PendingAmount::NONE) };
+}
+
+/// Loads the bookings of the current account scope on a worker thread, then redraws. An amount
+/// filter that was accepted but is still loading is carried along instead of being dropped.
 fn reload(win: &MainWindow, vault: Arc<Vault>) {
+    let committed = with_state(|st| st.amount);
+    let amount = PENDING_AMOUNT.with(|p| p.get().resolve(committed));
+    reload_with(win, vault, amount);
+}
+
+/// Takes the loaded rows into the state; the amount filter and the marks follow the rows, so a
+/// failed load keeps the previous filter with the previous rows and no hidden booking stays marked.
+fn commit_load(
+    st: &mut State,
+    rows: Vec<Row>,
+    balances: daily::Balances,
+    cats: Vec<Category>,
+    amount: amount_filter::AmountFilter,
+) {
+    let ids: std::collections::HashSet<i64> = rows.iter().map(|r| r.id).collect();
+    st.marked.retain(|id| ids.contains(id));
+    st.rows = rows;
+    st.balances = balances;
+    st.categories = cats;
+    st.amount = amount;
+}
+
+/// Like `reload`, but with a new amount filter that is committed only when the load succeeds.
+fn reload_with(win: &MainWindow, vault: Arc<Vault>, amount: amount_filter::AmountFilter) {
     let target = with_state(|st| st.target);
     let generation = with_state(|st| {
         st.generation += 1;
         st.generation
     });
+    PENDING_AMOUNT.with(|p| p.set(amount_filter::PendingAmount::of(amount)));
     let weak = win.as_weak();
     std::thread::spawn(move || {
-        let rows = load_rows(&vault, target);
+        let rows = load_rows(&vault, target, amount);
         let cats = vault.list_categories(None, None).map_err(|e| e.to_string());
         let _ = weak.upgrade_in_event_loop(move |win| {
             let vault = vault.clone();
             if !is_current(&vault) || with_state(|st| st.generation) != generation {
                 return;
             }
+            // Newest load settled: on success its filter is committed below, on failure the
+            // previous one stays; either way later reloads use the committed filter again.
+            PENDING_AMOUNT.with(|p| p.set(amount_filter::PendingAmount::NONE));
             match (rows, cats) {
                 (Ok((rows, balances)), Ok(cats)) => {
                     let mut names = vec![SharedString::from("Ohne Kategorie")];
@@ -781,11 +827,13 @@ fn reload(win: &MainWindow, vault: Arc<Vault>) {
                         color: tint(&c.color_hex),
                     }));
                     win.set_category_tiles(ModelRc::new(VecModel::from(tiles)));
-                    with_state(|st| {
-                        st.rows = rows;
-                        st.balances = balances;
-                        st.categories = cats;
+                    // The tag list derives from the rows: keep the selected tag by name, not by index.
+                    let tag_index = with_state(|st| {
+                        let tag = st.filter.tag.clone();
+                        commit_load(st, rows, balances, cats, amount);
+                        amount_filter::tag_index(&tag_names(&st.rows), &tag)
                     });
+                    win.set_tag_index(tag_index);
                     apply_filter(&win);
                     request_logos(&win, vault.clone());
                     refresh_dashboard(&win, vault);
@@ -1322,8 +1370,8 @@ fn show(win: &MainWindow, vault: &Arc<Vault>, selected: Option<i64>) {
             if sel.is_some() {
                 // First paint: load the scope's bookings synchronously (selects the first one);
                 // the background reload in `apply_view` then refreshes them.
-                let target = with_state(|st| st.target);
-                if let Ok((rows, balances)) = load_rows(vault, target) {
+                let (target, amount) = with_state(|st| (st.target, st.amount));
+                if let Ok((rows, balances)) = load_rows(vault, target, amount) {
                     with_state(|st| {
                         st.rows = rows;
                         st.balances = balances;
@@ -2024,6 +2072,39 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
+    {
+        // Amount filter (#357): filtered by the core, so a change reloads on the worker thread.
+        let (weak, vault) = (win.as_weak(), vault.clone());
+        win.on_amount_filter_apply(move |from, to, direction| {
+            let (Some(win), Some(v)) = (weak.upgrade(), vault.lock().unwrap().clone()) else {
+                return;
+            };
+            if privacy_on(&win) {
+                return;
+            }
+            match amount_filter::AmountFilter::parse(&from, &to, direction) {
+                Ok(amount) => {
+                    win.set_amount_filter_error("".into());
+                    win.set_amount_filter_open(false);
+                    reload_with(&win, v, amount);
+                }
+                Err(e) => win.set_amount_filter_error(e.into()),
+            }
+        });
+    }
+    {
+        let (weak, vault) = (win.as_weak(), vault.clone());
+        win.on_amount_filter_reset(move || {
+            let (Some(win), Some(v)) = (weak.upgrade(), vault.lock().unwrap().clone()) else {
+                return;
+            };
+            win.set_amount_from("".into());
+            win.set_amount_to("".into());
+            win.set_amount_direction(0);
+            win.set_amount_filter_error("".into());
+            reload_with(&win, v, Default::default());
+        });
+    }
     let hits: Arc<Mutex<Vec<Option<BankSearchResult>>>> = Arc::new(Mutex::new(vec![]));
     {
         let (weak, hits) = (win.as_weak(), hits.clone());
@@ -2235,6 +2316,12 @@ fn main() -> Result<(), slint::PlatformError> {
             SESSION.store(0, Ordering::SeqCst);
             *vault.lock().unwrap() = None;
             with_state(|st| *st = State::default());
+            PENDING_AMOUNT.with(|p| p.set(amount_filter::PendingAmount::NONE));
+            win.set_amount_from("".into());
+            win.set_amount_to("".into());
+            win.set_amount_direction(0);
+            win.set_amount_filter_open(false);
+            win.set_amount_filter_error("".into());
             win.set_unlocked(false);
             win.set_days(ModelRc::new(VecModel::from(Vec::<DayGroup>::new())));
             // #949: the armed order comparison (amount, IBAN) must not outlive the vault either
@@ -3018,10 +3105,11 @@ mod tests {
         let (rows, _) = account_rows(&vault, false).unwrap();
         assert!(!rows.is_empty());
         let first = Target::Account(rows[0].id as i64);
-        assert!(!load_rows(&vault, first).unwrap().0.is_empty());
+        let none = amount_filter::AmountFilter::default();
+        assert!(!load_rows(&vault, first, none).unwrap().0.is_empty());
         // All accounts (scope 0) holds at least as many rows as one account.
-        let (all, all_balances) = load_rows(&vault, Target::AllAccounts).unwrap();
-        assert!(all.len() >= load_rows(&vault, first).unwrap().0.len());
+        let (all, all_balances) = load_rows(&vault, Target::AllAccounts, none).unwrap();
+        assert!(all.len() >= load_rows(&vault, first, none).unwrap().0.len());
         // Several accounts never get a balance column (#569).
         assert_eq!(all_balances, daily::Balances::default());
         // Privacy hides balances and the IBAN tail.
@@ -3032,6 +3120,24 @@ mod tests {
                 .all(|r| r.balance == daily::MASK && r.iban != "•••• 3000")
         );
         assert_eq!(total, daily::MASK);
+    }
+
+    #[test]
+    fn commit_load_takes_filter_and_drops_marks_of_hidden_rows() {
+        let path =
+            std::env::temp_dir().join(format!("girocrab-win-commit-{}.sqlite", std::process::id()));
+        let vault = Vault::open(path.display().to_string(), vec![7; 32]).unwrap();
+        vault.seed_demo_data().unwrap();
+        let none = amount_filter::AmountFilter::default();
+        let (rows, balances) = load_rows(&vault, Target::AllAccounts, none).unwrap();
+        let kept = rows[0].id;
+        let mut st = State::default();
+        st.marked.extend([kept, i64::MIN]);
+        let income = amount_filter::AmountFilter::parse("", "", 1).unwrap();
+        commit_load(&mut st, rows, balances, vec![], income);
+        assert_eq!(st.amount, income);
+        assert_eq!(st.marked, std::collections::HashSet::from([kept]));
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
