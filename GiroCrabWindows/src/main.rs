@@ -28,6 +28,7 @@ mod settings_import_ui;
 mod sync_flow;
 mod tags_ui;
 mod transfer_flow;
+mod updates;
 mod vault_key;
 mod views_ui;
 
