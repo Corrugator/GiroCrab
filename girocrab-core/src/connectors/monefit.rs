@@ -86,18 +86,24 @@ fn classify(txn_type: &str) -> (i64, String) {
     }
 }
 
-/// One entry of `/account/list`; `None` for an entry without a usable date or amount.
+/// One entry of `/account/list`; `None` for an entry without a usable date, amount
+/// or type (a missing type must not turn into an incoming booking).
 fn parse_booking(t: &Value) -> Option<RemoteTransaction> {
     let time = t["time"].as_str()?.trim();
     // "2026-07-09 12:34:56": the calendar day is the booking date
     let date = time
         .get(..10)
         .filter(|d| crate::dates::parse_iso(d).is_some())?;
-    let txn_type = t["txnType"].as_str().unwrap_or_default();
+    let txn_type = t["txnType"]
+        .as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())?;
     let sum = amount(&t["sum"])?;
     let fee = fee(&t["fee"])?;
     let (sign, booking_text) = classify(txn_type);
-    let amount_cents = cents_rounded(Decimal::from(sign) * sum - fee)?;
+    // values from the network: an overflow rejects the booking instead of panicking
+    let signed = Decimal::from(sign).checked_mul(sum)?.checked_sub(fee)?;
+    let amount_cents = cents_rounded(signed)?;
     let description = t["description"].as_str().map(str::trim).unwrap_or_default();
     Some(RemoteTransaction {
         account_ref: ACCOUNT_REF.into(),
@@ -463,9 +469,36 @@ mod tests {
     }
 
     #[test]
-    fn entry_without_time_or_amount_is_rejected() {
+    fn entry_without_time_amount_or_type_is_rejected() {
         assert!(parse_booking(&json!({ "sum": "1.00", "txnType": "DEPOSIT" })).is_none());
-        assert!(parse_booking(&json!({ "time": "2026-10-01 10:00:00", "sum": "abc" })).is_none());
-        assert!(parse_booking(&json!({ "time": "kaputt", "sum": "1.00" })).is_none());
+        assert!(
+            parse_booking(
+                &json!({ "time": "2026-10-01 10:00:00", "sum": "abc", "txnType": "DEPOSIT" })
+            )
+            .is_none()
+        );
+        assert!(
+            parse_booking(&json!({ "time": "kaputt", "sum": "1.00", "txnType": "DEPOSIT" }))
+                .is_none()
+        );
+        // missing, null or blank type: no silent incoming booking
+        assert!(parse_booking(&json!({ "time": "2026-10-01 10:00:00", "sum": "1.00" })).is_none());
+        assert!(
+            parse_booking(
+                &json!({ "time": "2026-10-01 10:00:00", "sum": "1.00", "txnType": null })
+            )
+            .is_none()
+        );
+        assert!(parse_booking(&entry("2026-10-01 10:00:00", "", "1", "0", None)).is_none());
+        assert!(parse_booking(&entry("2026-10-01 10:00:00", "  ", "1", "0", None)).is_none());
+    }
+
+    #[test]
+    fn overflowing_amount_is_rejected_without_panic() {
+        // -MAX - fee overflows Decimal; the booking is dropped instead of panicking
+        let max = Decimal::MAX.to_string();
+        assert!(
+            parse_booking(&entry("2026-10-01 10:00:00", "WITHDRAWAL", &max, "1", None)).is_none()
+        );
     }
 }

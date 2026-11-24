@@ -3,7 +3,7 @@
 //! (your own data, nothing is stored or sent anywhere but to the provider).
 //!
 //! ```sh
-//! read -s SAVINGS_PASSWORD
+//! IFS= read -r -s SAVINGS_PASSWORD
 //! export SAVINGS_PASSWORD
 //! CONNECTOR=monefit SAVINGS_LOGIN='erika@example.org' SINCE=2026-01-01 \
 //!   cargo run -q -p girocrab-core --example monefit_web

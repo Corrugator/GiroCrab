@@ -41,8 +41,8 @@ arbeitet.
   durchnummeriert (`#1`, `#2` …), unabhängig von der Reihenfolge der Antwort. Der Verwendungszweck
   selbst gehört nicht zur ID, damit eine umformulierte Beschreibung keine neuen Buchungen erzeugt.
 * Passwort und Token gehen nur an `https://api-smartsaver.monefit.com`; Weiterleitungen werden nicht verfolgt.
-* Eine Buchung ohne lesbares Datum oder ohne lesbaren Betrag verwirft den ganzen Abruf, ebenso ein fehlender
-  Saldo oder eine Umsatzantwort, die keine Liste ist. Eine fehlende Gebühr zählt als 0.
+* Eine Buchung ohne lesbares Datum, ohne lesbaren Betrag oder ohne Buchungstyp verwirft den ganzen Abruf,
+  ebenso ein fehlender Saldo oder eine Umsatzantwort, die keine Liste ist. Eine fehlende Gebühr zählt als 0.
 
 ## Offene Punkte
 
