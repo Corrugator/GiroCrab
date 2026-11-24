@@ -199,8 +199,8 @@ public final class AppModel {
         didSet {
             let column = MainColumn(shownSelection)
             #if os(iOS)
-            // The detail sheet belongs to the list it was opened from.
-            if column != mainColumn { showBookingSheet = false }
+            // The detail sheet belongs to the list it was opened from (not a depot or Sachwerte view).
+            if !Self.keepsDetailSheet(from: mainColumn, to: column, presentation: presentation) { showBookingSheet = false }
             #endif
             mainColumn = column
             showsOverview = shownSelection == .allAccounts
@@ -523,7 +523,8 @@ public final class AppModel {
     /// selects something else, instead of vanishing under the cursor.
     var lingeringBookingID: Booking.ID?
     /// iOS: set by a tap on a row (booking, planned payment, mandate), presents the detail
-    /// sheet when the window has no room for the detail column; cleared when the column changes.
+    /// sheet when the window has no room for the detail column; cleared when the column changes,
+    /// a depot or Sachwerte account is shown, or an editor opens from the sheet.
     var showBookingSheet = false
     var collapsedGroups: Set<Int64> = Set(AppDefaults.store.array(forKey: "sidebar.collapsedKindGroups") as? [Int64] ?? []) {
         didSet { AppDefaults.store.set(Array(collapsedGroups), forKey: "sidebar.collapsedKindGroups") }

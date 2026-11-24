@@ -600,6 +600,16 @@ struct MainSplitView: View {
     /// three-column split shows only its (empty) detail column in a regular
     /// but narrow window such as an unfolded iPhone Duo held upright, and the
     /// system `.inspector` shows neither column nor sheet there.
+    @Environment(\.reportRedaction) private var reportRedaction
+
+    /// iPhone sheet title: the merchant, else the booking text like the list row, else
+    /// "Buchung" (an empty name left the title blank).
+    private var bookingSheetTitle: String {
+        guard let b = model.selectedBooking else { return String(localized: "Buchung") }
+        let name = b.merchant.name.isEmpty ? b.bookingText : b.merchant.name
+        return name.isEmpty ? String(localized: "Buchung") : name
+    }
+
     private var splitView: some View {
         HStack(spacing: 0) {
             NavigationSplitView(columnVisibility: $columns) {
@@ -626,8 +636,20 @@ struct MainSplitView: View {
             // same booking once the window is narrow again.
             set: { if !$0, !inspectorFits { model.showBookingSheet = false } }
         )) {
-            NavigationStack { InspectorView() }
-                .presentationDetents([.medium, .large])
+            // Title + "Fertig" (UI-Audit INS-3); the merchant is personal, so the
+            // title is masked in the bug report (a parameter text, no `.sensitive()`).
+            NavigationStack {
+                InspectorView()
+                    .navigationTitle(reportRedaction.masking(bookingSheetTitle))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Fertig") { model.showBookingSheet = false }
+                        }
+                    }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         // Unfolding or widening the window (compact → regular) would otherwise
         // bring the sidebar back as an overlay on top of the booking column.
