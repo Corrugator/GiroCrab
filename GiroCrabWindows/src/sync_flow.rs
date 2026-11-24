@@ -749,4 +749,25 @@ mod tests {
             assert_eq!(import_error_text(core), INVALID_EXPORT, "{core}");
         }
     }
+
+    #[test]
+    fn fixed_value_errors_are_shown_without_file_content() {
+        // The core's fixed reasons for bad values reach the user unchanged.
+        for reason in [
+            "unsupported currency",
+            "invalid number",
+            "invalid date",
+            "invalid ISIN in a holding",
+        ] {
+            assert_eq!(
+                import_error_text(&format!("Ungültige Eingabe: Finpension: {reason}")),
+                format!("Finpension-Import: {reason}")
+            );
+        }
+        // The old form with the raw value: nothing after the quote's first line may slip through
+        // as file content once a value carries a colon and a line break.
+        let old = "Ungültige Eingabe: Finpension: unsupported currency 'x:geheim\nrest'";
+        let shown = import_error_text(old);
+        assert!(!shown.contains("rest") && !shown.contains('\n'), "{shown}");
+    }
 }
