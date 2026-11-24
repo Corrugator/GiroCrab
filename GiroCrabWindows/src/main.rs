@@ -1022,6 +1022,19 @@ fn run_sync(vault: Arc<Vault>, demo: bool, ui: &DialogBridge) -> Result<String, 
             }
             continue;
         }
+        if sync_flow::auth_for(c.connector) == sync_flow::Auth::FileImport {
+            let result = import_export_file(&vault, c.id, &c.display_name);
+            log_file_import(&vault, c.id, &result);
+            match result {
+                Ok(Some(s)) => {
+                    done += 1;
+                    imported += s.transactions_imported;
+                }
+                Ok(None) => {}
+                Err(e) => problems.push(format!("{}: {e}", c.display_name)),
+            }
+            continue;
+        }
         if sync_flow::auth_for(c.connector) == sync_flow::Auth::ApiSignature {
             // On this worker thread like the sync itself: the vault writes never block the UI.
             if let Err(e) = sync_flow::ensure_api_signature(&c.display_name, ui, &*vault) {
@@ -1191,9 +1204,13 @@ fn add_bank(
                 .map_err(e)?;
         }
     }
+    let file_import = r
+        .connector
+        .is_some_and(|k| sync_flow::auth_for(k) == sync_flow::Auth::FileImport);
     Ok(format!(
-        "{} hinzugefügt. Mit „Jetzt abrufen“ starten Sie den ersten Abruf.",
-        r.name
+        "{} hinzugefügt. {}",
+        r.name,
+        sync_flow::added_hint(file_import)
     ))
 }
 
@@ -1487,6 +1504,52 @@ fn pick_import_file() -> Option<PathBuf> {
 
 #[cfg(not(windows))]
 fn pick_import_file() -> Option<PathBuf> {
+    std::env::var_os("GIROCRAB_IMPORT_FILE").map(PathBuf::from)
+}
+
+/// File-import connection (Finpension, #975), called from the sync worker: the user picks the
+/// export, the core imports it into connection `id`. `Ok(None)` = dialog cancelled (skipped).
+fn import_export_file(
+    vault: &Arc<Vault>,
+    id: i64,
+    bank: &str,
+) -> Result<Option<girocrab_core::connectors::SyncSummary>, String> {
+    let Some(path) = pick_export_file(bank) else {
+        return Ok(None);
+    };
+    let bytes = sync_flow::read_export(&path)?;
+    vault
+        .clone()
+        .import_finpension_export(id, bytes)
+        .map(Some)
+        .map_err(|e| sync_flow::import_error_text(&e.to_string()))
+}
+
+/// Sync-history entry of a file import; a cancelled pick (`Ok(None)`) leaves none.
+fn log_file_import(
+    vault: &Vault,
+    id: i64,
+    result: &Result<Option<girocrab_core::connectors::SyncSummary>, String>,
+) {
+    let (outcome, message, imported) = match result {
+        Ok(Some(s)) => (SyncLogOutcome::Ok, String::new(), s.transactions_imported),
+        Ok(None) => return,
+        Err(e) => (SyncLogOutcome::Error, e.clone(), 0),
+    };
+    let _ = vault.log_sync(Some(id), SyncLogSource::Manual, outcome, message, imported);
+}
+
+/// Native file dialog for a bank export (Windows). Elsewhere (development builds) there is none.
+#[cfg(windows)]
+fn pick_export_file(bank: &str) -> Option<PathBuf> {
+    rfd::FileDialog::new()
+        .set_title(format!("Datei importieren – {bank}"))
+        .add_filter("Export (CSV, JSON)", &["csv", "json"])
+        .pick_file()
+}
+
+#[cfg(not(windows))]
+fn pick_export_file(_bank: &str) -> Option<PathBuf> {
     std::env::var_os("GIROCRAB_IMPORT_FILE").map(PathBuf::from)
 }
 
@@ -2836,11 +2899,76 @@ mod tests {
         assert!(transfer_prefill_from_args(args(&["--demo"])).is_none());
     }
 
+    /// Unique temp database path per run; the file is removed on drop, also after a failed assert.
+    /// Declare it before the vault so the vault is dropped (and unlocked) first.
+    struct TempDb(std::path::PathBuf);
+
+    impl TempDb {
+        fn new(tag: &str) -> Self {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default();
+            Self(std::env::temp_dir().join(format!(
+                "girocrab-win-{tag}-{}-{nanos}.sqlite",
+                std::process::id()
+            )))
+        }
+
+        fn path_string(&self) -> String {
+            self.0.display().to_string()
+        }
+    }
+
+    impl Drop for TempDb {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+            for suffix in ["-wal", "-shm", "-journal"] {
+                let mut side = self.0.clone().into_os_string();
+                side.push(suffix);
+                let _ = std::fs::remove_file(std::path::PathBuf::from(side));
+            }
+        }
+    }
+
+    #[test]
+    fn file_import_is_logged_except_cancelled() {
+        use girocrab_core::connectors::SyncSummary;
+        use girocrab_core::sync_log::SyncLogFilter;
+        let db = TempDb::new("fileimp");
+        let vault = Vault::open(db.path_string(), vec![5; 32]).unwrap();
+        let summary = SyncSummary {
+            accounts_updated: 1,
+            transactions_imported: 3,
+            transactions_categorized: 0,
+            transactions_skipped_archived: 0,
+            new_accounts: vec![],
+            revoked_accounts: vec![],
+            postbox_documents: None,
+            warnings: vec![],
+            hints: vec![],
+        };
+        log_file_import(&vault, 1, &Ok(None));
+        let none = SyncLogFilter::default();
+        assert!(vault.list_sync_log(none.clone()).unwrap().is_empty());
+        log_file_import(&vault, 1, &Ok(Some(summary)));
+        log_file_import(&vault, 1, &Err("kaputt".into()));
+        let log = vault.list_sync_log(none).unwrap();
+        assert_eq!(log.len(), 2);
+        assert!(
+            log.iter()
+                .any(|e| e.outcome == SyncLogOutcome::Ok && e.imported == 3)
+        );
+        assert!(
+            log.iter()
+                .any(|e| e.outcome == SyncLogOutcome::Error && e.message == "kaputt")
+        );
+    }
+
     #[test]
     fn demo_vault_has_accounts_and_bookings() {
-        let path =
-            std::env::temp_dir().join(format!("girocrab-win-demo-{}.sqlite", std::process::id()));
-        let vault = Vault::open(path.display().to_string(), vec![7; 32]).unwrap();
+        let db = TempDb::new("demo");
+        let vault = Vault::open(db.path_string(), vec![7; 32]).unwrap();
         vault.seed_demo_data().unwrap();
         let (rows, _) = account_rows(&vault, false).unwrap();
         assert!(!rows.is_empty());
@@ -2859,7 +2987,6 @@ mod tests {
                 .all(|r| r.balance == daily::MASK && r.iban != "•••• 3000")
         );
         assert_eq!(total, daily::MASK);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
